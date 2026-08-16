@@ -1,19 +1,21 @@
+import { Chess } from 'https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm';
 import { problems } from './data/problems.js';
 
 const PIECES = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const FILES = 'abcdefgh';
-const LONG_PRESS_MS = 380;
-const MOVE_CANCEL_PX = 12;
+const DRAG_THRESHOLD_PX = 7;
 const problem = problems[0];
 
 let board = parseFen(problem.fen);
 let orientation = 'white';
 let selected = null;
+let legalMoves = [];
+let hoverTarget = null;
+let gesture = null;
 let phase = 'key';
 let activeDefense = null;
 let solvedDefenses = new Set();
 let lastMove = [];
-let press = null;
 
 const boardEl = document.querySelector('#board');
 const feedback = document.querySelector('#feedback');
@@ -46,17 +48,47 @@ function squareOrder(){
 function pieceColor(p){return p===p.toUpperCase()?'white':'black';}
 function canMovePiece(p){return (phase==='key'||phase==='mate')&&pieceColor(p)==='white';}
 
-function clearPress(){
-  if(!press) return null;
-  if(press.timer) clearTimeout(press.timer);
-  press.el?.classList.remove('holding');
-  const old=press;
-  press=null;
-  return old;
+function engineForCurrentPosition(){
+  const chess=new Chess(problem.fen);
+  if(phase==='mate'&&activeDefense){
+    chess.move({from:problem.key.uci.slice(0,2),to:problem.key.uci.slice(2,4)});
+    chess.move({from:activeDefense.black.slice(0,2),to:activeDefense.black.slice(2,4)});
+  }
+  return chess;
 }
 
+function legalMovesFrom(sq){
+  if(!(phase==='key'||phase==='mate')) return [];
+  try{
+    return engineForCurrentPosition().moves({square:sq,verbose:true});
+  }catch{
+    return [];
+  }
+}
+
+function selectSquare(sq,{announce=true}={}){
+  const p=board[sq];
+  if(!p||!canMovePiece(p)) return false;
+  selected=sq;
+  legalMoves=legalMovesFrom(sq);
+  hoverTarget=null;
+  updateMarkers();
+  if(announce){
+    showFeedback('neutral','●',`${sq} selected.`,`${legalMoves.length}個の合法手を表示中。指を滑らせて、行き先で離してもOKです。`);
+  }
+  return true;
+}
+
+function clearSelection(){
+  selected=null;
+  legalMoves=[];
+  hoverTarget=null;
+  updateMarkers();
+}
+
+function legalMoveTo(sq){return legalMoves.find(m=>m.to===sq);}
+
 function render(){
-  clearPress();
   boardEl.innerHTML='';
   squareOrder().forEach(sq=>{
     const file=FILES.indexOf(sq[0]);
@@ -64,7 +96,6 @@ function render(){
     const div=document.createElement('div');
     div.className=`square ${(file+rank)%2?'light':'dark'}`;
     div.dataset.square=sq;
-    if(selected===sq) div.classList.add('selected');
     if(lastMove.includes(sq)) div.classList.add('last');
 
     const edgeFile=orientation==='white'?(rank===1):(rank===8);
@@ -79,90 +110,109 @@ function render(){
       el.textContent=PIECES[p];
       div.append(el);
     }
-
-    div.addEventListener('pointerdown',e=>beginPress(e,sq,div));
-    div.addEventListener('pointermove',e=>movePress(e));
-    div.addEventListener('pointerup',e=>endPress(e,sq));
-    div.addEventListener('pointercancel',()=>clearPress());
-    div.addEventListener('lostpointercapture',()=>{if(press?.timer) clearTimeout(press.timer);});
-    div.addEventListener('contextmenu',e=>e.preventDefault());
     boardEl.append(div);
+  });
+  updateMarkers();
+}
+
+function updateMarkers(){
+  boardEl.querySelectorAll('.square').forEach(el=>{
+    const sq=el.dataset.square;
+    el.classList.toggle('selected',sq===selected);
+    el.classList.remove('legal','capture-target','hover-target');
+    const move=legalMoveTo(sq);
+    if(move){
+      el.classList.add('legal');
+      if(move.captured) el.classList.add('capture-target');
+    }
+    if(sq===hoverTarget&&move) el.classList.add('hover-target');
   });
 }
 
-function beginPress(e,sq,div){
+function squareAtPoint(x,y){
+  const el=document.elementFromPoint(x,y)?.closest?.('.square');
+  return el&&boardEl.contains(el)?el.dataset.square:null;
+}
+
+function beginPointer(e){
+  if(e.button!==undefined&&e.button!==0) return;
+  const sq=e.target.closest('.square')?.dataset.square;
+  if(!sq) return;
   e.preventDefault();
-  clearPress();
-  press={id:e.pointerId,sq,startX:e.clientX,startY:e.clientY,moved:false,fired:false,timer:null,el:div};
-  try{div.setPointerCapture(e.pointerId);}catch{}
 
-  const targetPiece=board[sq];
-  const isOwnMovablePiece=targetPiece&&canMovePiece(targetPiece);
-  const canHoldToMove=selected&&sq!==selected&&!isOwnMovablePiece;
-  if(!canHoldToMove) return;
-
-  div.classList.add('holding');
-  press.timer=setTimeout(()=>commitHeldMove(sq),LONG_PRESS_MS);
-}
-
-function movePress(e){
-  if(!press||press.id!==e.pointerId) return;
-  const dx=e.clientX-press.startX;
-  const dy=e.clientY-press.startY;
-  if(Math.hypot(dx,dy)>MOVE_CANCEL_PX){
-    press.moved=true;
-    if(press.timer){clearTimeout(press.timer);press.timer=null;}
-    press.el?.classList.remove('holding');
-  }
-}
-
-function endPress(e,sq){
-  if(!press||press.id!==e.pointerId) return;
-  e.preventDefault();
-  const old=clearPress();
-  if(!old||old.fired||old.moved) return;
-  handleTap(sq);
-}
-
-function commitHeldMove(sq){
-  if(!press||press.sq!==sq||!selected) return;
-  const from=selected;
-  press.fired=true;
-  press.el?.classList.remove('holding');
-  if(press.timer) clearTimeout(press.timer);
-  press=null;
-  selected=null;
-  if(navigator.vibrate) navigator.vibrate(18);
-  attemptMove(from,sq);
-  render();
-}
-
-function handleTap(sq){
   const p=board[sq];
-  if(!selected){
-    if(p&&canMovePiece(p)){
-      selected=sq;
-      showFeedback('neutral','●',`${sq} selected.`,'移動したいマスを長押しすると、その手を確定します。');
-      render();
-    }
+  const ownMovable=p&&canMovePiece(p);
+
+  if(ownMovable){
+    selectSquare(sq,{announce:false});
+    gesture={id:e.pointerId,from:sq,startX:e.clientX,startY:e.clientY,moved:false};
+  }else if(selected&&legalMoveTo(sq)){
+    gesture={id:e.pointerId,from:selected,startX:e.clientX,startY:e.clientY,moved:false,directTarget:sq};
+    hoverTarget=sq;
+    updateMarkers();
+  }else{
+    gesture={id:e.pointerId,from:null,startX:e.clientX,startY:e.clientY,moved:false};
+  }
+
+  try{boardEl.setPointerCapture(e.pointerId);}catch{}
+}
+
+function movePointer(e){
+  if(!gesture||gesture.id!==e.pointerId||!selected) return;
+  e.preventDefault();
+  if(Math.hypot(e.clientX-gesture.startX,e.clientY-gesture.startY)>DRAG_THRESHOLD_PX) gesture.moved=true;
+  const sq=squareAtPoint(e.clientX,e.clientY);
+  const next=sq&&legalMoveTo(sq)?sq:null;
+  if(next!==hoverTarget){hoverTarget=next;updateMarkers();}
+}
+
+function endPointer(e){
+  if(!gesture||gesture.id!==e.pointerId) return;
+  e.preventDefault();
+  const old=gesture;
+  gesture=null;
+
+  const releaseSq=squareAtPoint(e.clientX,e.clientY) || old.directTarget || null;
+  const move=releaseSq?legalMoveTo(releaseSq):null;
+
+  if(selected&&move&&releaseSq!==selected&&(old.moved||old.directTarget)){
+    commitSelectedMove(releaseSq);
     return;
   }
 
-  if(selected===sq){
-    selected=null;
-    showFeedback('neutral','○','Selection cleared.','別の白駒をタップして選び直せます。');
-    render();
+  hoverTarget=null;
+
+  if(old.from&&releaseSq===old.from){
+    updateMarkers();
+    showFeedback('neutral','●',`${selected} selected.`,`${legalMoves.length}個の合法手を表示中。そのまま行き先へ滑らせるか、行き先をタップ。`);
     return;
   }
 
+  const p=releaseSq?board[releaseSq]:null;
   if(p&&canMovePiece(p)){
-    selected=sq;
-    showFeedback('neutral','●',`${sq} selected.`,'選択を切り替えました。移動先は長押しで確定します。');
-    render();
+    selectSquare(releaseSq);
     return;
   }
 
-  showFeedback('neutral','↧','Hold to move.','そのマスへ指すなら、短いタップではなく長押ししてください。');
+  if(selected&&move){
+    commitSelectedMove(releaseSq);
+    return;
+  }
+
+  updateMarkers();
+}
+
+function cancelPointer(){gesture=null;hoverTarget=null;updateMarkers();}
+
+function commitSelectedMove(to){
+  if(!selected||!legalMoveTo(to)) return;
+  const from=selected;
+  selected=null;
+  legalMoves=[];
+  hoverTarget=null;
+  if(navigator.vibrate) navigator.vibrate(12);
+  attemptMove(from,to);
+  render();
 }
 
 function movePiece(uci){
@@ -184,7 +234,7 @@ function attemptMove(from,to){
       pulseBoard();
       return;
     }
-    showFeedback('bad','×','Not the key.','この手では、黒のすべての応手に対して2手目のmateを保証できません。');
+    showFeedback('bad','×','Legal, but not the key.','合法手ではありますが、黒のすべての応手に対して2手目のmateを保証できません。');
     pulseBoard();
     return;
   }
@@ -200,13 +250,14 @@ function attemptMove(from,to){
       if(solvedDefenses.size===problem.defenses.length) completeProblem();
       return;
     }
-    showFeedback('bad','×','That is not the mating reply.','この防御に対する2手目をもう一度探してください。');
+    showFeedback('bad','×','Legal, but not mate.','この防御に対する2手目としては詰みになりません。もう一度探してください。');
     pulseBoard();
   }
 }
 
 function onKeySolved(){
   phase='defenses';
+  clearSelection();
   showFeedback('good','✓',`${problem.key.san} — key found.`,problem.key.note);
   defenseSection.classList.remove('is-hidden');
   renderDefenses();
@@ -234,6 +285,8 @@ function chooseDefense(d){
   movePiece(d.black);
   activeDefense=d;
   selected=null;
+  legalMoves=[];
+  hoverTarget=null;
   phase='mate';
   showFeedback('neutral','→',d.blackSan,'この黒の防御に対して、白の2手目で詰ませる。');
   updatePhase();
@@ -246,7 +299,7 @@ function updatePhase(){
   if(phase==='key'){
     phaseIndex.textContent='01';
     phaseTitle.textContent='Find the key';
-    phaseText.textContent='白駒をタップ → 移動先を長押し。静かな初手も疑う。';
+    phaseText.textContent='駒に触れると合法手を表示。そのまま滑らせ、行き先で指を離して着手。';
   }else if(phase==='defenses'){
     phaseIndex.textContent='02';
     phaseTitle.textContent='Test every defence';
@@ -254,7 +307,7 @@ function updatePhase(){
   }else if(phase==='mate'){
     phaseIndex.textContent='03';
     phaseTitle.textContent='Finish the line';
-    phaseText.textContent='白駒をタップ → mating squareを長押し。';
+    phaseText.textContent='白駒に触れると合法手を表示。mating squareで指を離す。';
   }
 }
 
@@ -274,18 +327,20 @@ function pulseBoard(){
 function reset(){
   board=parseFen(problem.fen);
   selected=null;
+  legalMoves=[];
+  hoverTarget=null;
   activeDefense=null;
   phase='key';
   lastMove=[];
   solvedDefenses=new Set();
   defenseSection.classList.add('is-hidden');
-  showFeedback('neutral','○','Quietly inspect the position.','駒をタップして選び、移動先を長押ししてください。');
+  showFeedback('neutral','○','Quietly inspect the position.','白駒に触れると、その駒の合法手が盤上に表示されます。');
   updatePhase();
   render();
 }
 
 function reveal(){
-  selected=null;
+  clearSelection();
   if(phase==='key'){
     movePiece(problem.key.uci);
     onKeySolved();
@@ -313,6 +368,11 @@ function completeProblem(){
   showFeedback('good','★','Proof complete.','すべての代表防御にmateを確認しました。keyを「当てた」のではなく、構造を証明できています。');
 }
 
+boardEl.addEventListener('pointerdown',beginPointer);
+boardEl.addEventListener('pointermove',movePointer);
+boardEl.addEventListener('pointerup',endPointer);
+boardEl.addEventListener('pointercancel',cancelPointer);
+boardEl.addEventListener('lostpointercapture',cancelPointer);
 boardEl.addEventListener('contextmenu',e=>e.preventDefault());
 boardEl.addEventListener('selectstart',e=>e.preventDefault());
 boardEl.addEventListener('dragstart',e=>e.preventDefault());
@@ -323,6 +383,8 @@ document.querySelector('#hintBtn').addEventListener('click',hint);
 document.querySelector('#flipBtn').addEventListener('click',()=>{
   orientation=orientation==='white'?'black':'white';
   selected=null;
+  legalMoves=[];
+  hoverTarget=null;
   render();
 });
 
