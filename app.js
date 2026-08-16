@@ -4,6 +4,7 @@ import { problems } from './data/problems.js';
 const PIECES = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const FILES = 'abcdefgh';
 const DRAG_THRESHOLD_PX = 7;
+const HINT_GLOW_MS = 2400;
 const problem = problems[0];
 
 let board = parseFen(problem.fen);
@@ -16,6 +17,8 @@ let phase = 'key';
 let activeDefense = null;
 let solvedDefenses = new Set();
 let lastMove = [];
+let hintSquare = null;
+let hintTimer = null;
 
 const boardEl = document.querySelector('#board');
 const feedback = document.querySelector('#feedback');
@@ -66,16 +69,30 @@ function legalMovesFrom(sq){
   }
 }
 
-function selectSquare(sq,{announce=true}={}){
+function clearHint(){
+  if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
+  hintSquare=null;
+}
+
+function showPieceHint(sq){
+  clearHint();
+  hintSquare=sq;
+  updateMarkers();
+  hintTimer=setTimeout(()=>{
+    hintSquare=null;
+    hintTimer=null;
+    updateMarkers();
+  },HINT_GLOW_MS);
+}
+
+function selectSquare(sq){
   const p=board[sq];
   if(!p||!canMovePiece(p)) return false;
+  clearHint();
   selected=sq;
   legalMoves=legalMovesFrom(sq);
   hoverTarget=null;
   updateMarkers();
-  if(announce){
-    showFeedback('neutral','●',`${sq} selected.`,`${legalMoves.length}個の合法手を表示中。指を滑らせて、行き先で離してもOKです。`);
-  }
   return true;
 }
 
@@ -119,6 +136,7 @@ function updateMarkers(){
   boardEl.querySelectorAll('.square').forEach(el=>{
     const sq=el.dataset.square;
     el.classList.toggle('selected',sq===selected);
+    el.classList.toggle('hint-piece',sq===hintSquare);
     el.classList.remove('legal','capture-target','hover-target');
     const move=legalMoveTo(sq);
     if(move){
@@ -144,7 +162,7 @@ function beginPointer(e){
   const ownMovable=p&&canMovePiece(p);
 
   if(ownMovable){
-    selectSquare(sq,{announce:false});
+    selectSquare(sq);
     gesture={id:e.pointerId,from:sq,startX:e.clientX,startY:e.clientY,moved:false};
   }else if(selected&&legalMoveTo(sq)){
     gesture={id:e.pointerId,from:selected,startX:e.clientX,startY:e.clientY,moved:false,directTarget:sq};
@@ -184,7 +202,6 @@ function endPointer(e){
 
   if(old.from&&releaseSq===old.from){
     updateMarkers();
-    showFeedback('neutral','●',`${selected} selected.`,`${legalMoves.length}個の合法手を表示中。そのまま行き先へ滑らせるか、行き先をタップ。`);
     return;
   }
 
@@ -207,6 +224,7 @@ function cancelPointer(){gesture=null;hoverTarget=null;updateMarkers();}
 function commitSelectedMove(to){
   if(!selected||!legalMoveTo(to)) return;
   const from=selected;
+  clearHint();
   selected=null;
   legalMoves=[];
   hoverTarget=null;
@@ -231,11 +249,9 @@ function attemptMove(from,to){
     const knownTry=problem.tries.find(t=>t.uci===uci);
     if(knownTry){
       showFeedback('bad','×',`${knownTry.san} — a convincing try`,`${knownTry.refutation} が一手だけ残るため失敗。盤面は元に戻しました。`);
-      pulseBoard();
       return;
     }
     showFeedback('bad','×','Legal, but not the key.','合法手ではありますが、黒のすべての応手に対して2手目のmateを保証できません。');
-    pulseBoard();
     return;
   }
 
@@ -251,12 +267,12 @@ function attemptMove(from,to){
       return;
     }
     showFeedback('bad','×','Legal, but not mate.','この防御に対する2手目としては詰みになりません。もう一度探してください。');
-    pulseBoard();
   }
 }
 
 function onKeySolved(){
   phase='defenses';
+  clearHint();
   clearSelection();
   showFeedback('good','✓',`${problem.key.san} — key found.`,problem.key.note);
   defenseSection.classList.remove('is-hidden');
@@ -280,6 +296,7 @@ function renderDefenses(){
 }
 
 function chooseDefense(d){
+  clearHint();
   board=parseFen(problem.fen);
   movePiece(problem.key.uci);
   movePiece(d.black);
@@ -296,18 +313,16 @@ function chooseDefense(d){
 
 function updatePhase(){
   document.body.dataset.phase=phase;
+  phaseText.textContent='';
   if(phase==='key'){
     phaseIndex.textContent='01';
     phaseTitle.textContent='Find the key';
-    phaseText.textContent='駒に触れると合法手を表示。そのまま滑らせ、行き先で指を離して着手。';
   }else if(phase==='defenses'){
     phaseIndex.textContent='02';
     phaseTitle.textContent='Test every defence';
-    phaseText.textContent='黒の応手を選び、ひとつずつmateを証明する。';
   }else if(phase==='mate'){
     phaseIndex.textContent='03';
     phaseTitle.textContent='Finish the line';
-    phaseText.textContent='白駒に触れると合法手を表示。mating squareで指を離す。';
   }
 }
 
@@ -318,13 +333,8 @@ function showFeedback(type,icon,title,text){
   feedback.querySelector('span').textContent=text;
 }
 
-function pulseBoard(){
-  boardEl.classList.remove('pulse');
-  void boardEl.offsetWidth;
-  boardEl.classList.add('pulse');
-}
-
 function reset(){
+  clearHint();
   board=parseFen(problem.fen);
   selected=null;
   legalMoves=[];
@@ -334,12 +344,13 @@ function reset(){
   lastMove=[];
   solvedDefenses=new Set();
   defenseSection.classList.add('is-hidden');
-  showFeedback('neutral','○','Quietly inspect the position.','白駒に触れると、その駒の合法手が盤上に表示されます。');
+  showFeedback('neutral','○','Quietly inspect the position.','まずは黒王の周囲を見る。');
   updatePhase();
   render();
 }
 
 function reveal(){
+  clearHint();
   clearSelection();
   if(phase==='key'){
     movePiece(problem.key.uci);
@@ -359,9 +370,11 @@ function reveal(){
 }
 
 function hint(){
-  if(phase==='key') showFeedback('neutral','·','Hint 01','王手ではありません。白キングの「待つ一歩」を候補に。');
-  else if(phase==='mate') showFeedback('neutral','·','Hint 02',activeDefense.note.replace(/mating|mate/gi,'decisive'));
-  else showFeedback('neutral','·','Hint','未検証の黒の防御をひとつ選んでください。');
+  if(phase==='key'){
+    showPieceHint(problem.key.uci.slice(0,2));
+  }else if(phase==='mate'&&activeDefense){
+    showPieceHint(activeDefense.mate.slice(0,2));
+  }
 }
 
 function completeProblem(){
@@ -381,6 +394,7 @@ document.querySelector('#resetBtn').addEventListener('click',reset);
 document.querySelector('#revealBtn').addEventListener('click',reveal);
 document.querySelector('#hintBtn').addEventListener('click',hint);
 document.querySelector('#flipBtn').addEventListener('click',()=>{
+  clearHint();
   orientation=orientation==='white'?'black':'white';
   selected=null;
   legalMoves=[];
