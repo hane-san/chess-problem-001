@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c10" />
+  <title>Chess Problem 001 — Mate in Two Lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="noise"></div>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Chess Problem Lab home">
+        <span class="brand-mark">♞</span>
+        <span><strong>MATE / TWO</strong><small>CHESS PROBLEM LAB</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="status-pill"><span></span> #2 prototype</span>
+        <button class="icon-btn" id="flipBtn" type="button" aria-label="盤面を反転">↻</button>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <div class="board-column">
+        <div class="problem-kicker">
+          <span id="problemId">CP—0001</span>
+          <span class="divider"></span>
+          <span>WHITE TO MOVE</span>
+        </div>
+        <div class="board-wrap">
+          <div id="board" class="board" aria-label="Chess problem board"></div>
+          <div class="board-glow"></div>
+        </div>
+        <div class="board-foot">
+          <div><span class="label">STIPULATION</span><strong>#2</strong></div>
+          <div><span class="label">MODE</span><strong>WAITING</strong></div>
+          <div><span class="label">LEVEL</span><strong>02 / 05</strong></div>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <section class="problem-head">
+          <div class="eyebrow">PROBLEM 001</div>
+          <h1>Find the key.<br><em>Then prove it.</em></h1>
+          <p>白の初手を探してください。正しい key のあと、黒の防御をひとつずつ選び、すべてに対する mate を確認します。</p>
+        </section>
+
+        <section id="phaseCard" class="phase-card">
+          <div class="phase-index">01</div>
+          <div>
+            <span class="label">CURRENT PHASE</span>
+            <h2 id="phaseTitle">Find the key</h2>
+            <p id="phaseText">駒をドラッグ、または「駒 → 移動先」の順にタップ。</p>
+          </div>
+        </section>
+
+        <section id="feedback" class="feedback neutral" aria-live="polite">
+          <div class="feedback-icon">○</div>
+          <div><strong>Quietly inspect the position.</strong><span>まずは黒王の周囲と、黒の合法そうな応手を眺める。</span></div>
+        </section>
+
+        <section id="defenseSection" class="defense-section is-hidden">
+          <div class="section-title"><span>BLACK DEFENCES</span><small id="defenseCount">0 / 8</small></div>
+          <div id="defenseGrid" class="defense-grid"></div>
+        </section>
+
+        <section class="controls">
+          <button class="btn secondary" id="resetBtn" type="button">Reset</button>
+          <button class="btn secondary" id="hintBtn" type="button">Hint</button>
+          <button class="btn primary" id="revealBtn" type="button">Reveal key <span>→</span></button>
+        </section>
+
+        <section class="meta">
+          <div><span class="label">COMPOSER</span><strong id="composer">D. J. Shire</strong></div>
+          <div><span class="label">SOURCE</span><strong>1997 · The Problemist</strong></div>
+        </section>
+      </aside>
+    </section>
+
+    <footer>
+      <span>Prototype 0.1</span>
+      <span>FEN-first · data-driven · #2 only</span>
+    </footer>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
