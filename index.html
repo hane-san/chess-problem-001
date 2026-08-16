@@ -53,13 +53,13 @@
           <div>
             <span class="label">CURRENT PHASE</span>
             <h2 id="phaseTitle">Find the key</h2>
-            <p id="phaseText">駒をタップして選択 → 移動先を長押し。</p>
+            <p id="phaseText">駒に触れると合法手を表示。そのまま行き先へ滑らせて離す。</p>
           </div>
         </section>
 
         <section id="feedback" class="feedback neutral" aria-live="polite">
           <div class="feedback-icon">○</div>
-          <div><strong>Quietly inspect the position.</strong><span>駒をタップして選び、移動先を長押ししてください。</span></div>
+          <div><strong>Quietly inspect the position.</strong><span>白駒に触れると、その駒の合法手が盤上に表示されます。</span></div>
         </section>
 
         <section id="defenseSection" class="defense-section is-hidden">
@@ -81,8 +81,8 @@
     </section>
 
     <footer>
-      <span>Prototype 0.2</span>
-      <span>Tap → hold · FEN-first · #2 only</span>
+      <span>Prototype 0.3</span>
+      <span>Touch → glide → release · legal moves · #2 only</span>
     </footer>
   </main>
   <script type="module" src="app.js"></script>
