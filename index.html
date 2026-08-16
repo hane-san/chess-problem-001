@@ -8,6 +8,15 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Chess Problem 001 — Mate in Two Lab</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .square.hint-piece .piece{
+      animation:hintPieceGlow 1.05s ease-in-out infinite;
+    }
+    @keyframes hintPieceGlow{
+      0%,100%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 5px rgba(217,255,99,.35));}
+      50%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 12px rgba(217,255,99,.95)) drop-shadow(0 0 20px rgba(217,255,99,.5));}
+    }
+  </style>
 </head>
 <body>
   <div class="noise"></div>
