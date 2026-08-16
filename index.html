@@ -18,7 +18,7 @@
         <span><strong>MATE / TWO</strong><small>CHESS PROBLEM LAB</small></span>
       </a>
       <div class="top-actions">
-        <span class="status-pill"><span></span> #2 prototype</span>
+        <span class="status-pill"><span></span> #2</span>
         <button class="icon-btn" id="flipBtn" type="button" aria-label="盤面を反転">↻</button>
       </div>
     </header>
@@ -53,13 +53,13 @@
           <div>
             <span class="label">CURRENT PHASE</span>
             <h2 id="phaseTitle">Find the key</h2>
-            <p id="phaseText">駒に触れると合法手を表示。そのまま行き先へ滑らせて離す。</p>
+            <p id="phaseText" class="is-hidden" aria-hidden="true"></p>
           </div>
         </section>
 
         <section id="feedback" class="feedback neutral" aria-live="polite">
           <div class="feedback-icon">○</div>
-          <div><strong>Quietly inspect the position.</strong><span>白駒に触れると、その駒の合法手が盤上に表示されます。</span></div>
+          <div><strong>Quietly inspect the position.</strong><span>まずは黒王の周囲を見る。</span></div>
         </section>
 
         <section id="defenseSection" class="defense-section is-hidden">
@@ -81,8 +81,8 @@
     </section>
 
     <footer>
-      <span>Prototype 0.3</span>
-      <span>Touch → glide → release · legal moves · #2 only</span>
+      <span>MATE / TWO</span>
+      <span>#2 · CP—0001</span>
     </footer>
   </main>
   <script type="module" src="app.js"></script>
