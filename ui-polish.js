@@ -1,6 +1,10 @@
+import { problems } from './data/problems.js';
+
+const problem = problems[0];
 const board = document.querySelector('#board');
 const feedback = document.querySelector('#feedback');
 const phaseTitle = document.querySelector('#phaseTitle');
+const phaseText = document.querySelector('#phaseText');
 const phaseIndex = document.querySelector('.phase-index');
 const revealBtn = document.querySelector('#revealBtn');
 
@@ -13,6 +17,9 @@ const PIECE_CLASS = {
   '♙':'p','♟':'p'
 };
 
+let guidePhase = null;
+const guideIndex = { key:0, defenses:0, mate:0 };
+
 function normalizePieces(){
   board?.querySelectorAll('.square').forEach(square=>square.classList.remove('king-square'));
   board?.querySelectorAll('.piece').forEach(piece=>{
@@ -24,8 +31,47 @@ function normalizePieces(){
   });
 }
 
+function currentPhase(){
+  return document.body.dataset.phase || 'key';
+}
+
+function renderThinkingHint(){
+  if(!phaseText) return;
+  const phase=currentPhase();
+  const hints=problem.guidance?.[phase] || [];
+
+  if(guidePhase!==phase){
+    guidePhase=phase;
+    guideIndex[phase]=0;
+  }
+
+  if(!hints.length){
+    phaseText.textContent='';
+    phaseText.classList.add('is-hidden');
+    phaseText.setAttribute('aria-hidden','true');
+    return;
+  }
+
+  const index=Math.min(guideIndex[phase] || 0,hints.length-1);
+  phaseText.classList.remove('is-hidden');
+  phaseText.removeAttribute('aria-hidden');
+  phaseText.classList.toggle('single-guide',hints.length===1);
+  phaseText.textContent=`考え方 ${index+1}/${hints.length}｜${hints[index]}${hints.length>1?'  ›':''}`;
+  phaseText.setAttribute('role',hints.length>1?'button':'note');
+  phaseText.setAttribute('tabindex',hints.length>1?'0':'-1');
+  phaseText.setAttribute('aria-label',hints.length>1?`考え方ヒント ${index+1}/${hints.length}。タップで次のヒント`:`考え方ヒント`);
+}
+
+function nextThinkingHint(){
+  const phase=currentPhase();
+  const hints=problem.guidance?.[phase] || [];
+  if(hints.length<=1) return;
+  guideIndex[phase]=((guideIndex[phase] || 0)+1)%hints.length;
+  renderThinkingHint();
+}
+
 function phaseCopy(){
-  const phase=document.body.dataset.phase || 'key';
+  const phase=currentPhase();
   const copy={
     key:['01','① 初手（Key）を探す'],
     defenses:['02','② 防御（Defence）を検証する'],
@@ -44,6 +90,8 @@ function phaseCopy(){
       revealBtn.innerHTML='答えを見る <span>→</span>';
     }
   }
+
+  renderThinkingHint();
 }
 
 function localizeFeedback(){
@@ -69,7 +117,7 @@ function localizeFeedback(){
     else if(revealMatch) nextTitle=`${revealMatch[1]}：答え`;
   }
 
-  if(nextText==='まずは黒王の周囲を見る。') nextText='ヒントONなら、動かす駒だけが光っています。まずはその駒の行き先を考えてみましょう。';
+  if(nextText==='まずは黒王の周囲を見る。') nextText='盤面の仕組みを観察して、Keyを探します。';
   else if(nextText==='黒にこの手を壊す応手があります。') nextText='黒に、この初手を成立させない防御があります。';
   else if(nextText==='この黒手のあと、白は次の1手で詰ませられません。') nextText='この防御のあと、白は2手目でMateできません。だからこの初手はKeyではありません。';
   else if(nextText==='黒がこう応じられるので、まだmateではありません。') nextText='黒にこの応手が残るため、まだMateではありません。';
@@ -83,6 +131,16 @@ function localizeFeedback(){
 normalizePieces();
 phaseCopy();
 localizeFeedback();
+
+if(phaseText){
+  phaseText.addEventListener('click',nextThinkingHint);
+  phaseText.addEventListener('keydown',event=>{
+    if(event.key==='Enter'||event.key===' '){
+      event.preventDefault();
+      nextThinkingHint();
+    }
+  });
+}
 
 if(board){
   new MutationObserver(()=>normalizePieces()).observe(board,{childList:true,subtree:true});
