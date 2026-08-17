@@ -6,6 +6,7 @@ const defenseCount = document.querySelector('#defenseCount');
 let seenDone = new Set();
 let resultTimer = null;
 let impactTimer = null;
+let proofQueued = false;
 
 const result = document.createElement('div');
 result.className = 'variation-result';
@@ -26,20 +27,27 @@ function findBlackKingSquare(){
   return king?.closest('.square') || null;
 }
 
-function showResult(progress){
+function showResult(progress,{final=false}={}){
   if(resultTimer){clearTimeout(resultTimer);resultTimer=null;}
-  const complete=progress.total>0 && progress.solved===progress.total;
-  result.classList.toggle('complete',complete);
-  result.innerHTML=complete
-    ? '<strong>PROOF COMPLETE.</strong><span>すべての防御変化を攻略</span>'
-    : `<strong>MATE ✓</strong><span>この防御を攻略 · ${progress.solved} / ${progress.total}</span>`;
+  result.classList.toggle('complete',final);
+
+  if(final){
+    result.innerHTML='<strong>PROOF COMPLETE.</strong><span>どの防御にも白のMateが成立</span>';
+  }else if(progress.total>0 && progress.solved===progress.total){
+    result.innerHTML='<strong>ALL DEFENCES ✓</strong><span>最後に、8本の変化を順番に再生します</span>';
+  }else{
+    result.innerHTML=`<strong>MATE ✓</strong><span>この防御を攻略 · ${progress.solved} / ${progress.total}</span>`;
+  }
+
   requestAnimationFrame(()=>result.classList.add('is-visible'));
-  resultTimer=setTimeout(()=>result.classList.remove('is-visible'),complete?1750:1150);
+  const duration=final?2300:(progress.solved===progress.total?1050:1150);
+  resultTimer=setTimeout(()=>result.classList.remove('is-visible'),duration);
 }
 
 function celebrateVariation(newLabel){
   requestAnimationFrame(()=>{
     const progress=parseProgress();
+    const complete=progress.total>0 && progress.solved===progress.total;
     const blackKing=findBlackKingSquare();
     if(blackKing){
       blackKing.classList.remove('mate-impact');
@@ -59,7 +67,15 @@ function celebrateVariation(newLabel){
     }
 
     showResult(progress);
-    if(navigator.vibrate) navigator.vibrate(progress.solved===progress.total?[18,40,24]:18);
+    if(navigator.vibrate) navigator.vibrate(complete?[18,40,24]:18);
+
+    if(complete && !proofQueued){
+      proofQueued=true;
+      setTimeout(()=>{
+        result.classList.remove('is-visible');
+        window.dispatchEvent(new CustomEvent('cp-proof-sweep'));
+      },1080);
+    }
   });
 }
 
@@ -69,6 +85,7 @@ function syncSolvedVariations(){
 
   if(current.size < seenDone.size){
     seenDone=current;
+    proofQueued=false;
     return;
   }
 
@@ -76,6 +93,10 @@ function syncSolvedVariations(){
   seenDone=current;
   if(added.length) celebrateVariation(added[added.length-1]);
 }
+
+window.addEventListener('cp-proof-sweep-finished',()=>{
+  showResult(parseProgress(),{final:true});
+});
 
 if(defenseGrid){
   new MutationObserver(syncSolvedVariations).observe(defenseGrid,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
