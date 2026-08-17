@@ -52,7 +52,7 @@
   border-radius:4px;
 }
 
-/* Defence selection is a small scene: Black moves first, then White is invited to reply. */
+/* Defence selection is a small scene: reset the story, replay the key, then show Black's branch. */
 .turn-cue{
   position:absolute;
   left:50%;
@@ -68,7 +68,7 @@
   box-shadow:0 8px 24px rgba(0,0,0,.24);
   opacity:0;
   translate:-50% -7px;
-  transition:opacity .18s ease,translate .22s ease,border-color .18s ease;
+  transition:opacity .18s ease,translate .22s ease,border-color .18s ease,box-shadow .18s ease;
   pointer-events:none;
   text-align:center;
 }
@@ -76,38 +76,66 @@
 .turn-cue small,.turn-cue strong{display:block}
 .turn-cue small{font:600 7px 'DM Mono',monospace;letter-spacing:.14em;color:#8d95a0;margin-bottom:2px}
 .turn-cue strong{font:650 11px/1.15 Inter,system-ui,sans-serif;color:#f5f6f7}
-.turn-cue.defence{border-color:rgba(255,255,255,.22)}
+.turn-cue.replay{border-color:rgba(255,255,255,.16);background:rgba(10,12,15,.76)}
+.turn-cue.replay small{color:#8d95a0}
+.turn-cue.key-turn{border-color:rgba(217,255,99,.34);box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 16px rgba(217,255,99,.08)}
+.turn-cue.key-turn small{color:#c5dd8c}
+.turn-cue.defence{border-color:rgba(176,194,214,.34);box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 18px rgba(174,198,220,.08)}
+.turn-cue.defence small{color:#aab9c9}
 .turn-cue.white-turn{border-color:rgba(217,255,99,.46);box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 18px rgba(217,255,99,.10)}
 .turn-cue.white-turn small{color:var(--accent)}
 
 .defense-grid.is-previewing{pointer-events:none}
+.board.variation-replay .square.hint-piece{animation:none;box-shadow:none!important}
+.board.variation-replay .square.hint-piece .piece{animation:none!important}
+.board.variation-replay .square.king-square{outline-color:rgba(255,210,112,.48)}
+
 .defense-flyer{
   position:absolute;
   z-index:24;
   display:grid;
   place-items:center;
   pointer-events:none;
-  transition:transform .47s cubic-bezier(.22,.78,.2,1);
+  transition:transform .67s cubic-bezier(.18,.72,.22,1);
   will-change:transform;
 }
 .defense-flyer .piece{pointer-events:none}
 .defense-source-hidden{opacity:0!important}
+.replay-flyer{filter:drop-shadow(0 7px 8px rgba(0,0,0,.28))}
+.replay-key-flyer .piece{filter:drop-shadow(0 0 9px rgba(217,255,99,.22))}
+.replay-defence-flyer .piece{filter:drop-shadow(0 0 9px rgba(190,207,224,.18))}
+
+.square.replay-key-source{
+  box-shadow:inset 0 0 0 2px rgba(217,255,99,.20);
+}
+.square.replay-key-target{
+  box-shadow:inset 0 0 0 3px rgba(217,255,99,.30),inset 0 0 16px rgba(217,255,99,.08);
+}
+.square.replay-key-landed{animation:keyArrival .55s ease-out}
+@keyframes keyArrival{
+  0%{box-shadow:inset 0 0 0 5px rgba(217,255,99,.58),inset 0 0 24px rgba(217,255,99,.16)}
+  100%{box-shadow:inset 0 0 0 1px rgba(217,255,99,0),inset 0 0 0 rgba(217,255,99,0)}
+}
+.square.replay-defence-source{
+  box-shadow:inset 0 0 0 2px rgba(188,207,226,.18);
+}
+.square.replay-defence-target,
 .square.defense-preview-target{
-  box-shadow:inset 0 0 0 3px rgba(255,255,255,.42),inset 0 0 18px rgba(255,255,255,.10);
+  box-shadow:inset 0 0 0 3px rgba(196,214,232,.38),inset 0 0 18px rgba(196,214,232,.08);
 }
 .square.defense-landed{
-  box-shadow:inset 0 0 0 4px rgba(255,255,255,.72),inset 0 0 22px rgba(255,255,255,.18);
+  box-shadow:inset 0 0 0 4px rgba(220,233,244,.68),inset 0 0 22px rgba(220,233,244,.16);
 }
-.square.defense-arrival{animation:defenseArrival .8s ease-out}
+.square.defense-arrival{animation:defenseArrival .9s ease-out}
 @keyframes defenseArrival{
-  0%{box-shadow:inset 0 0 0 6px rgba(255,255,255,.88),inset 0 0 28px rgba(255,255,255,.30),0 0 17px rgba(255,255,255,.28)}
+  0%{box-shadow:inset 0 0 0 6px rgba(226,238,248,.86),inset 0 0 28px rgba(212,228,241,.26),0 0 17px rgba(200,219,236,.22)}
   100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,0),inset 0 0 0 rgba(255,255,255,0),0 0 0 rgba(255,255,255,0)}
 }
-.defense-chip.defense-preview{border-color:rgba(255,255,255,.70);color:#fff;background:rgba(255,255,255,.055)}
+.defense-chip.defense-preview{border-color:rgba(207,224,239,.68);color:#fff;background:rgba(196,214,232,.055)}
 
 /* Captures feel decisive but stay local: no board flash. */
 .piece.capture-breaking{
-  animation:captureBreak .30s cubic-bezier(.22,.7,.2,1) forwards!important;
+  animation:captureBreak .34s cubic-bezier(.22,.7,.2,1) forwards!important;
 }
 .square.capture-impact::after{
   content:"";
@@ -116,18 +144,38 @@
   z-index:18;
   pointer-events:none;
   border-radius:50%;
-  border:2px solid rgba(255,255,255,.72);
-  animation:captureRing .36s ease-out forwards;
+  border:2px solid rgba(230,240,248,.74);
+  animation:captureRing .42s ease-out forwards;
 }
 @keyframes captureBreak{
   0%{opacity:1;filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) blur(0)}
-  55%{opacity:.62;filter:drop-shadow(0 0 10px rgba(255,255,255,.55)) blur(1px)}
-  100%{opacity:0;filter:drop-shadow(0 0 16px rgba(255,255,255,.30)) blur(5px)}
+  55%{opacity:.62;filter:drop-shadow(0 0 10px rgba(220,235,247,.50)) blur(1px)}
+  100%{opacity:0;filter:drop-shadow(0 0 16px rgba(220,235,247,.28)) blur(5px)}
 }
 @keyframes captureRing{
   0%{inset:30%;opacity:.92}
   100%{inset:4%;opacity:0}
 }
+
+/* Arrows are annotations, not neon signs: thinner, rounded, and semantically distinct. */
+.refutation-arrow line{
+  stroke-width:4.25!important;
+  stroke-linecap:round;
+  opacity:.92;
+  filter:drop-shadow(0 0 4px rgba(255,112,92,.34));
+}
+.refutation-arrow:not(.answer-mode) line{
+  stroke-dasharray:9 7;
+  animation:refutationFlow .9s linear infinite;
+}
+.refutation-arrow:not(.answer-mode) marker path{fill:#ff735f}
+.refutation-arrow.answer-mode line{
+  stroke-width:4.5!important;
+  stroke-linecap:round;
+  opacity:.94;
+  filter:drop-shadow(0 0 5px rgba(217,255,99,.45))!important;
+}
+@keyframes refutationFlow{to{stroke-dashoffset:-16}}
 
 /* Solved variations: visible progress, not a generic 'correct' flash. */
 .defense-chip.done{
@@ -202,7 +250,8 @@
 }
 
 @media(prefers-reduced-motion:reduce){
-  .square.hint-piece,.square.hint-piece .piece,.square.defense-arrival,.defense-chip.just-solved,.square.mate-impact,.square.mate-impact::after{animation:none!important}
+  .square.hint-piece,.square.hint-piece .piece,.square.defense-arrival,.square.replay-key-landed,.defense-chip.just-solved,.square.mate-impact,.square.mate-impact::after{animation:none!important}
   .defense-flyer,.turn-cue,.variation-result{transition:none}
   .piece.capture-breaking{animation:none!important;opacity:0}
+  .refutation-arrow:not(.answer-mode) line{animation:none}
 }
