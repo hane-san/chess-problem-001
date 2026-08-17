@@ -8,6 +8,7 @@ let resultTimer = null;
 let impactTimer = null;
 let proofQueued = false;
 let awaitingNext = false;
+let advancing = false;
 
 const result = document.createElement('div');
 result.className = 'variation-result';
@@ -35,6 +36,7 @@ function nextDefenseButton(){
 
 function closeResult(){
   awaitingNext=false;
+  advancing=false;
   result.classList.remove('is-visible','next-ready');
   boardWrap?.classList.remove('awaiting-next');
 }
@@ -42,6 +44,7 @@ function closeResult(){
 function showResult(progress,{final=false}={}){
   if(resultTimer){clearTimeout(resultTimer);resultTimer=null;}
   awaitingNext=false;
+  advancing=false;
   result.classList.toggle('complete',final);
   result.classList.remove('next-ready');
   boardWrap?.classList.remove('awaiting-next');
@@ -66,11 +69,18 @@ function showResult(progress,{final=false}={}){
   }
 }
 
-function advanceToNext(){
-  if(!awaitingNext) return;
+async function advanceToNext(){
+  if(!awaitingNext||advancing) return;
   const next=nextDefenseButton();
   if(!next) return;
-  closeResult();
+  advancing=true;
+  awaitingNext=false;
+  boardWrap?.classList.remove('awaiting-next');
+  result.classList.remove('next-ready');
+  result.innerHTML='<strong>BRANCH RESET</strong><span>Key後の分岐点へ戻して、次の防御を見ます</span>';
+  await new Promise(resolve=>setTimeout(resolve,230));
+  result.classList.remove('is-visible');
+  advancing=false;
   requestAnimationFrame(()=>next.click());
 }
 
@@ -131,7 +141,6 @@ result.addEventListener('pointerup',event=>{
   advanceToNext();
 });
 
-// If the user explicitly chooses another Defence, the solved banner gets out of the way.
 document.addEventListener('pointerdown',event=>{
   if(event.target.closest?.('.defense-chip')) closeResult();
 },true);
