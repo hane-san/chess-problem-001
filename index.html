@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="visual-polish.css" />
   <style>
-    /* iPhoneでも字形の大きさが揃って見えるよう、駒種ごとに光学補正する。 */
+    /* Optical sizing for Unicode chess glyphs. */
     .piece{
       width:84%;
       height:84%;
@@ -33,6 +33,18 @@
     .square.selected .piece.piece-n{transform:scale(.95) translateY(1%)}
     .square.selected .piece.piece-p{transform:scale(.84) translateY(2%)}
 
+    /* Keep the proposition readable without making the explanatory phrase the hero. */
+    .problem-head h1 .headline-prefix{
+      display:block;
+      margin:0 0 7px;
+      font-size:.32em;
+      line-height:1;
+      letter-spacing:.045em;
+      color:#9da5af;
+      font-weight:560;
+    }
+    .problem-head h1 em{display:block;color:#eef1f2}
+
     /* Answer = lime; refutation remains coral/red. */
     .refutation-arrow.answer-mode line{
       stroke:var(--accent);
@@ -49,6 +61,28 @@
       50%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 13px rgba(217,255,99,.95))}
     }
 
+    @media(max-width:900px){
+      .problem-head{grid-template-columns:1fr!important}
+      .problem-head .eyebrow{display:none!important}
+      .problem-head h1{
+        grid-column:1!important;
+        display:flex!important;
+        align-items:baseline;
+        gap:6px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+      .problem-head h1 .headline-prefix{
+        display:inline;
+        flex:0 0 auto;
+        margin:0;
+        font-size:9px;
+        letter-spacing:.02em;
+      }
+      .problem-head h1 em{display:inline!important;color:#eef1f2!important}
+      .problem-head p{grid-column:1!important}
+    }
     @media(max-width:430px){
       .piece{font-size:clamp(25px,min(8.35vw,7.9vh),45px)}
     }
@@ -97,7 +131,7 @@
       <aside class="panel">
         <section class="problem-head">
           <div class="eyebrow">PROBLEM 001 · D. J. SHIRE</div>
-          <h1>白の2手目で、<em>必ず詰ませる。</em></h1>
+          <h1><span class="headline-prefix">白の2手目で</span><em>必ず詰ませる。</em></h1>
           <p>初手を決め、黒の防御を1つずつ確かめ、どの変化にも白の2手目の詰みがあることを示します。</p>
         </section>
 
@@ -144,5 +178,6 @@
   <script type="module" src="app.js"></script>
   <script type="module" src="ui-polish.js"></script>
   <script type="module" src="motion-polish.js"></script>
+  <script type="module" src="variation-polish.js"></script>
 </body>
 </html>
