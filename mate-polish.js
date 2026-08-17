@@ -129,8 +129,8 @@ async function animateWhiteMove({from,to,duration,kind,capture=true}){
 
   await wait(duration);
   flyer.remove();
-  piece.classList.remove('defense-source-hidden');
-  capturedPiece?.classList.remove('capture-breaking');
+  // Keep the source hidden until the core app commits and rerenders the true board.
+  // This avoids a one-frame snap back to the origin square.
   toSquare.classList.remove('capture-impact',`white-${kind}-target`);
 }
 
