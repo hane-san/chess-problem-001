@@ -3,9 +3,36 @@
 .board:not(.hold-active) .square.legal:not(.capture-target){background-image:none!important}
 .board:not(.hold-active) .square.capture-target{box-shadow:none!important}
 .board:not(.hold-active) .square.hover-target{outline:none!important}
-.board.hold-active .square.selected:after{border-width:2px;border-radius:9px;box-shadow:0 0 16px rgba(217,255,99,.16)}
-.board.hold-active .square.legal:not(.capture-target){background-image:radial-gradient(circle at center,rgba(20,25,18,.50) 0 13%,rgba(217,255,99,.16) 14% 18%,transparent 19%)}
-.board.hold-active .square.capture-target{box-shadow:inset 0 0 0 4px rgba(217,255,99,.38),inset 0 0 18px rgba(217,255,99,.12)}
+
+/* Once the hold is recognised, show the full legal range clearly.
+   Quiet moves = centre marker / captures = ring / current finger target = strong outline. */
+.board.hold-active .square.selected:after{
+  display:block!important;
+  border:2.5px solid rgba(217,255,99,.9)!important;
+  border-radius:9px;
+  box-shadow:0 0 0 1px rgba(10,14,8,.28),0 0 18px rgba(217,255,99,.22);
+}
+.board.hold-active .square.legal:not(.capture-target){
+  background-image:radial-gradient(
+    circle at center,
+    rgba(24,29,20,.72) 0 11%,
+    rgba(217,255,99,.78) 12% 15%,
+    rgba(217,255,99,.22) 16% 20%,
+    transparent 21%
+  )!important;
+}
+.board.hold-active .square.capture-target{
+  box-shadow:inset 0 0 0 4px rgba(217,255,99,.62),inset 0 0 20px rgba(217,255,99,.16)!important;
+}
+.board.hold-active .square.hover-target{
+  outline:4px solid rgba(217,255,99,.96)!important;
+  outline-offset:-4px!important;
+  z-index:9;
+  box-shadow:inset 0 0 22px rgba(217,255,99,.18),0 0 14px rgba(217,255,99,.16)!important;
+}
+.board.hold-active .square.legal{
+  transition:box-shadow .08s linear,outline .08s linear,background-image .08s linear;
+}
 
 /* Rewind communicates hypothesis revision rather than punishment. */
 .board.mistake-rewind{pointer-events:none}
