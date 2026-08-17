@@ -7,6 +7,7 @@ let seenDone = new Set();
 let resultTimer = null;
 let impactTimer = null;
 let proofQueued = false;
+let awaitingNext = false;
 
 const result = document.createElement('div');
 result.className = 'variation-result';
@@ -27,21 +28,50 @@ function findBlackKingSquare(){
   return king?.closest('.square') || null;
 }
 
+function nextDefenseButton(){
+  return [...defenseGrid.querySelectorAll('.defense-chip')]
+    .find(button=>!button.classList.contains('done')&&!button.disabled) || null;
+}
+
+function closeResult(){
+  awaitingNext=false;
+  result.classList.remove('is-visible','next-ready');
+  boardWrap?.classList.remove('awaiting-next');
+}
+
 function showResult(progress,{final=false}={}){
   if(resultTimer){clearTimeout(resultTimer);resultTimer=null;}
+  awaitingNext=false;
   result.classList.toggle('complete',final);
+  result.classList.remove('next-ready');
+  boardWrap?.classList.remove('awaiting-next');
 
   if(final){
     result.innerHTML='<strong>PROOF COMPLETE.</strong><span>どの防御にも白のMateが成立</span>';
   }else if(progress.total>0 && progress.solved===progress.total){
-    result.innerHTML='<strong>ALL DEFENCES ✓</strong><span>最後に、8本の変化を順番に再生します</span>';
+    result.innerHTML='<strong>ALL DEFENCES ✓</strong><span>最後に、すべての変化を順番に再生します</span>';
   }else{
-    result.innerHTML=`<strong>MATE ✓</strong><span>この防御を攻略 · ${progress.solved} / ${progress.total}</span>`;
+    awaitingNext=true;
+    result.classList.add('next-ready');
+    boardWrap?.classList.add('awaiting-next');
+    result.innerHTML=`<strong>MATE ✓</strong><span>この防御を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT DEFENCE</em>`;
   }
 
   requestAnimationFrame(()=>result.classList.add('is-visible'));
-  const duration=final?2300:(progress.solved===progress.total?1050:1150);
-  resultTimer=setTimeout(()=>result.classList.remove('is-visible'),duration);
+
+  if(final){
+    resultTimer=setTimeout(()=>result.classList.remove('is-visible'),2600);
+  }else if(progress.solved===progress.total){
+    resultTimer=setTimeout(()=>result.classList.remove('is-visible'),1050);
+  }
+}
+
+function advanceToNext(){
+  if(!awaitingNext) return;
+  const next=nextDefenseButton();
+  if(!next) return;
+  closeResult();
+  requestAnimationFrame(()=>next.click());
 }
 
 function celebrateVariation(newLabel){
@@ -86,6 +116,7 @@ function syncSolvedVariations(){
   if(current.size < seenDone.size){
     seenDone=current;
     proofQueued=false;
+    closeResult();
     return;
   }
 
@@ -93,6 +124,17 @@ function syncSolvedVariations(){
   seenDone=current;
   if(added.length) celebrateVariation(added[added.length-1]);
 }
+
+result.addEventListener('pointerup',event=>{
+  if(!awaitingNext) return;
+  event.preventDefault();
+  advanceToNext();
+});
+
+// If the user explicitly chooses another Defence, the solved banner gets out of the way.
+document.addEventListener('pointerdown',event=>{
+  if(event.target.closest?.('.defense-chip')) closeResult();
+},true);
 
 window.addEventListener('cp-proof-sweep-finished',()=>{
   showResult(parseProgress(),{final:true});
