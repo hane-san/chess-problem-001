@@ -6,18 +6,31 @@
   <meta name="theme-color" content="#0b0c10" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>Chess Problem 001 — Mate in Two Lab</title>
+  <title>チェスプロブレム #2 — MATE / TWO</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* Optical sizing for Unicode chess glyphs: leave breathing room inside each square. */
+    /* iPhoneでも字形の大きさが揃って見えるよう、駒種ごとに光学補正する。 */
     .piece{
-      width:78%;
-      height:78%;
-      font-size:clamp(25px,min(7.6vw,7.6vh),57px);
-      line-height:.88;
-      transform:translateY(-1%);
+      width:84%;
+      height:84%;
+      font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","Arial Unicode MS",serif;
+      font-size:clamp(26px,min(7.9vw,7.9vh),59px);
+      line-height:1;
+      transform:translateY(0);
+      transform-origin:center;
     }
-    .square.selected .piece{transform:translateY(-1%)}
+    .piece.piece-k{transform:scale(.96) translateY(-1%)}
+    .piece.piece-q{transform:scale(.94) translateY(0)}
+    .piece.piece-r{transform:scale(.89) translateY(1%)}
+    .piece.piece-b{transform:scale(.93) translateY(0)}
+    .piece.piece-n{transform:scale(.95) translateY(1%)}
+    .piece.piece-p{transform:scale(.84) translateY(2%)}
+    .square.selected .piece.piece-k{transform:scale(.96) translateY(-1%)}
+    .square.selected .piece.piece-q{transform:scale(.94) translateY(0)}
+    .square.selected .piece.piece-r{transform:scale(.89) translateY(1%)}
+    .square.selected .piece.piece-b{transform:scale(.93) translateY(0)}
+    .square.selected .piece.piece-n{transform:scale(.95) translateY(1%)}
+    .square.selected .piece.piece-p{transform:scale(.84) translateY(2%)}
 
     /* Answer = lime; refutation remains coral/red. */
     .refutation-arrow.answer-mode line{
@@ -36,7 +49,7 @@
     }
 
     @media(max-width:430px){
-      .piece{font-size:clamp(25px,min(8.1vw,7.8vh),43px)}
+      .piece{font-size:clamp(25px,min(8.35vw,7.9vh),45px)}
     }
   </style>
 </head>
@@ -59,10 +72,10 @@
         <div class="problem-kicker">
           <span id="problemId">CP—0001</span>
           <span class="divider"></span>
-          <span>WHITE TO MOVE · MATE IN TWO</span>
+          <span>白番 · 2手詰</span>
         </div>
         <div class="board-wrap">
-          <div id="board" class="board" aria-label="Chess problem board"></div>
+          <div id="board" class="board" aria-label="チェスプロブレム盤面"></div>
           <svg id="refutationArrow" class="refutation-arrow" aria-hidden="true">
             <defs>
               <marker id="arrowHead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
@@ -74,50 +87,50 @@
           <div class="board-glow"></div>
         </div>
         <div class="board-foot">
-          <div><span class="label">STIPULATION</span><strong>#2</strong></div>
-          <div><span class="label">MODE</span><strong>WAITING</strong></div>
-          <div><span class="label">LEVEL</span><strong>02 / 05</strong></div>
+          <div><span class="label">問題</span><strong>#2</strong></div>
+          <div><span class="label">タイプ</span><strong>待ち</strong></div>
+          <div><span class="label">難易度</span><strong>2 / 5</strong></div>
         </div>
       </div>
 
       <aside class="panel">
         <section class="problem-head">
           <div class="eyebrow">PROBLEM 001 · D. J. SHIRE</div>
-          <h1>Find the key. <em>Then prove it.</em></h1>
-          <p>白の初手を探し、黒のすべての防御に対する2手目のmateを証明する。</p>
+          <h1>2手目で、<em>必ず詰ませる。</em></h1>
+          <p>白の初手を1手 → 黒の返しを見る → 白の2手目で詰み。まずは最初の1手を探します。</p>
         </section>
 
         <section id="phaseCard" class="phase-card">
           <div class="phase-index">01</div>
           <div>
-            <span class="label">CURRENT PHASE</span>
-            <h2 id="phaseTitle">Find the key</h2>
+            <span class="label">いまやること</span>
+            <h2 id="phaseTitle">① 初手を探す</h2>
             <p id="phaseText" class="is-hidden" aria-hidden="true"></p>
           </div>
         </section>
 
         <section id="feedback" class="feedback neutral" aria-live="polite">
           <div class="feedback-icon">○</div>
-          <div><strong>Quietly inspect the position.</strong><span>まずは黒王の周囲を見る。</span></div>
+          <div><strong>白の初手を考えてみましょう。</strong><span>ヒントONなら、動かす駒だけが光っています。</span></div>
         </section>
 
         <section id="defenseSection" class="defense-section is-hidden">
-          <div class="section-title"><span>BLACK DEFENCES</span><small id="defenseCount">0 / 8</small></div>
+          <div class="section-title"><span>黒の返し</span><small id="defenseCount">0 / 8</small></div>
           <div id="defenseGrid" class="defense-grid"></div>
         </section>
 
         <section class="controls">
-          <button class="btn secondary" id="resetBtn" type="button">Reset</button>
+          <button class="btn secondary" id="resetBtn" type="button">やり直す</button>
           <button class="hint-toggle is-on" id="hintToggle" type="button" role="switch" aria-checked="true" aria-label="ヒント表示">
-            <span>Hint</span>
+            <span>ヒント</span>
             <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           </button>
-          <button class="btn primary" id="revealBtn" type="button">Answer <span>→</span></button>
+          <button class="btn primary" id="revealBtn" type="button">答えを見る <span>→</span></button>
         </section>
 
         <section class="meta">
-          <div><span class="label">COMPOSER</span><strong id="composer">D. J. Shire</strong></div>
-          <div><span class="label">SOURCE</span><strong>1997 · The Problemist</strong></div>
+          <div><span class="label">作曲者</span><strong id="composer">D. J. Shire</strong></div>
+          <div><span class="label">出典</span><strong>1997 · The Problemist</strong></div>
         </section>
       </aside>
     </section>
@@ -128,5 +141,6 @@
     </footer>
   </main>
   <script type="module" src="app.js"></script>
+  <script type="module" src="ui-polish.js"></script>
 </body>
 </html>
