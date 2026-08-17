@@ -82,20 +82,39 @@ function dispatchCorePointer(type,target,pointerId,pointerType,clientX,clientY){
   target.dispatchEvent(event);
 }
 
+function clearSuccessTravelClasses(){
+  board?.classList.remove('white-success-travel','white-key-travel','white-mate-travel');
+}
+
+function restoreHiddenPieces(){
+  board?.querySelectorAll('.defense-source-hidden,.capture-breaking').forEach(piece=>{
+    piece.classList.remove('defense-source-hidden','capture-breaking');
+  });
+  board?.querySelectorAll('.white-key-target,.white-mate-target,.capture-impact').forEach(square=>{
+    square.classList.remove('white-key-target','white-mate-target','capture-impact');
+  });
+  board?.querySelectorAll('.white-success-flyer').forEach(flyer=>flyer.remove());
+}
+
 function commitMove(from,to,sourceEvent){
   const source=squareEl(from);
   const target=squareEl(to);
-  if(!source||!target) return;
+  if(!source||!target) return false;
+
+  // The core board resolves the release square with elementFromPoint().
+  // Keep the board hit-testable while replaying the synthetic commit; the long-press
+  // wrapper still blocks real user input because key-settling/mate-settling is active.
+  clearSuccessTravelClasses();
+
   const a=source.getBoundingClientRect();
   const b=target.getBoundingClientRect();
   const pointerId=sourceEvent.pointerId || 1;
   const pointerType=sourceEvent.pointerType || 'touch';
+  const beforePhase=document.body.dataset.phase;
 
   bypass=true;
   document.body.classList.add('programmatic-commit');
   try{
-    // Recreate a complete gesture after the visual animation. This does not depend on
-    // the original pointer capture still being alive, so the core state stays reliable.
     dispatchCorePointer('pointerdown',source,pointerId,pointerType,a.left+a.width/2,a.top+a.height/2);
     dispatchCorePointer('pointermove',target,pointerId,pointerType,b.left+b.width/2,b.top+b.height/2);
     dispatchCorePointer('pointerup',target,pointerId,pointerType,b.left+b.width/2,b.top+b.height/2);
@@ -103,6 +122,14 @@ function commitMove(from,to,sourceEvent){
     document.body.classList.remove('programmatic-commit');
     bypass=false;
   }
+
+  // Both successful Key and successful mating move enter the defence-selection phase.
+  const committed=beforePhase!== 'defenses' && document.body.dataset.phase==='defenses';
+  if(!committed){
+    console.error('[MATE/TWO] visual move finished but the core move did not commit', {from,to,beforePhase,afterPhase:document.body.dataset.phase});
+    restoreHiddenPieces();
+  }
+  return committed;
 }
 
 async function animateWhiteMove({from,to,duration,kind,capture=true}){
@@ -145,7 +172,9 @@ async function animateWhiteMove({from,to,duration,kind,capture=true}){
 
   await wait(duration);
   flyer.remove();
+  capturedPiece?.classList.remove('capture-breaking');
   toSquare.classList.remove('capture-impact',`white-${kind}-target`);
+  // The source remains hidden only until commitMove() synchronously rerenders the true board.
 }
 
 async function animateCorrectKey({from,to,event}){
@@ -155,9 +184,18 @@ async function animateCorrectKey({from,to,event}){
 
   showCue('WHITE KEY',problem.key.san,'key-turn');
   await animateWhiteMove({from,to,duration:KEY_TRAVEL_MS,kind:'key',capture:false});
-  commitMove(from,to,event);
-  await wait(reduceMotion?.matches ? 110 : KEY_BREATH_MS);
+  const committed=commitMove(from,to,event);
 
+  if(!committed){
+    restoreHiddenPieces();
+    document.body.classList.remove('key-settling');
+    clearSuccessTravelClasses();
+    hideCue();
+    animating=false;
+    return;
+  }
+
+  await wait(reduceMotion?.matches ? 110 : KEY_BREATH_MS);
   showCue('KEY FOUND',problem.key.san,'key-found');
   showKeyConfirmation();
   window.dispatchEvent(new CustomEvent('cp-key-settled',{
@@ -166,7 +204,7 @@ async function animateCorrectKey({from,to,event}){
 
   await wait(reduceMotion?.matches ? 100 : 420);
   document.body.classList.remove('key-settling');
-  board?.classList.remove('white-success-travel','white-key-travel');
+  clearSuccessTravelClasses();
   setTimeout(hideCue,620);
   animating = false;
 }
@@ -178,14 +216,23 @@ async function animateCorrectMate({from,to,defense,event}){
 
   showCue('WHITE MOVE',defense.mateSan,'proof-mate');
   await animateWhiteMove({from,to,duration:MATE_TRAVEL_MS,kind:'mate',capture:true});
-  commitMove(from,to,event);
+  const committed=commitMove(from,to,event);
+
+  if(!committed){
+    restoreHiddenPieces();
+    document.body.classList.remove('mate-settling');
+    clearSuccessTravelClasses();
+    hideCue();
+    animating=false;
+    return;
+  }
 
   await wait(reduceMotion?.matches ? 120 : MATE_BREATH_MS);
   flashBlackKing();
   showCue('CHECKMATE',defense.mateSan,'checkmate');
 
   document.body.classList.remove('mate-settling');
-  board?.classList.remove('white-success-travel','white-mate-travel');
+  clearSuccessTravelClasses();
   window.dispatchEvent(new CustomEvent('cp-mate-settled',{
     detail:{defenseId:defense.id,mateSan:defense.mateSan}
   }));
