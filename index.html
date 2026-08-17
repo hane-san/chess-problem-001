@@ -7,10 +7,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>チェスプロブレム #2 — MATE / TWO</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visual-polish.css" />
-  <link rel="stylesheet" href="interaction-polish.css" />
-  <link rel="stylesheet" href="mate-polish.css" />
+  <link rel="stylesheet" href="styles.css?v=20260817c" />
+  <link rel="stylesheet" href="visual-polish.css?v=20260817c" />
+  <link rel="stylesheet" href="interaction-polish.css?v=20260817c" />
+  <link rel="stylesheet" href="mate-polish.css?v=20260817c" />
   <style>
     /* Optical sizing: make the silhouettes readable at a glance.
        pawn < knight < bishop/rook < queen/king */
@@ -45,7 +45,6 @@
       text-shadow:0 1px 0 rgba(255,255,255,.18),0 0 1px rgba(255,255,255,.20);
     }
 
-    /* Keep the proposition readable without making the explanatory phrase the hero. */
     .problem-head h1 .headline-prefix{
       display:block;
       margin:0 0 7px;
@@ -57,7 +56,6 @@
     }
     .problem-head h1 em{display:block;color:#eef1f2}
 
-    /* Answer = lime; refutation remains coral/red. */
     .refutation-arrow.answer-mode line{
       stroke:var(--accent);
       stroke-width:4.5;
@@ -150,7 +148,7 @@
         <section class="problem-head">
           <div class="eyebrow">PROBLEM 001 · D. J. SHIRE</div>
           <h1><span class="headline-prefix">白の2手目で</span><em>必ず詰ませる。</em></h1>
-          <p>初手を決め、黒の防御を1つずつ確かめ、どの変化にも白の2手目の詰みがあることを示します。</p>
+          <p>Keyを決め、黒の防御変化を1本ずつ検証し、どの変化にも白の2手目のCheckmateがあることを示します。同じ応手になる防御は代表変化にまとめています。</p>
         </section>
 
         <section id="phaseCard" class="phase-card">
@@ -168,7 +166,7 @@
         </section>
 
         <section id="defenseSection" class="defense-section is-hidden">
-          <div class="section-title"><span>黒の防御 · DEFENCES</span><small id="defenseCount">0 / 8</small></div>
+          <div class="section-title"><span>黒の防御変化 · VARIATIONS</span><small id="defenseCount">0 / 8</small></div>
           <div id="defenseGrid" class="defense-grid"></div>
         </section>
 
@@ -190,16 +188,16 @@
 
     <footer>
       <span>MATE / TWO</span>
-      <span>#2 · KEY → DEFENCE → MATE</span>
+      <span>#2 · KEY → VARIATION → CHECKMATE</span>
     </footer>
   </main>
-  <script type="module" src="app.js"></script>
-  <script type="module" src="ui-polish.js"></script>
-  <script type="module" src="motion-polish.js"></script>
-  <script type="module" src="variation-polish.js"></script>
-  <script type="module" src="mate-polish.js"></script>
-  <script src="interaction-polish.js"></script>
-  <script src="mistake-polish.js"></script>
-  <script src="viewport-polish.js"></script>
+  <script type="module" src="app.js?v=20260817c"></script>
+  <script type="module" src="ui-polish.js?v=20260817c"></script>
+  <script type="module" src="motion-polish.js?v=20260817c"></script>
+  <script type="module" src="variation-polish.js?v=20260817c"></script>
+  <script type="module" src="mate-polish.js?v=20260817c"></script>
+  <script src="interaction-polish.js?v=20260817c"></script>
+  <script src="mistake-polish.js?v=20260817c"></script>
+  <script src="viewport-polish.js?v=20260817c"></script>
 </body>
 </html>
