@@ -8,6 +8,37 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Chess Problem 001 — Mate in Two Lab</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Optical sizing for Unicode chess glyphs: leave breathing room inside each square. */
+    .piece{
+      width:78%;
+      height:78%;
+      font-size:clamp(25px,min(7.6vw,7.6vh),57px);
+      line-height:.88;
+      transform:translateY(-1%);
+    }
+    .square.selected .piece{transform:translateY(-1%)}
+
+    /* Answer = lime; refutation remains coral/red. */
+    .refutation-arrow.answer-mode line{
+      stroke:var(--accent);
+      stroke-width:7;
+      stroke-dasharray:none;
+      animation:none;
+      filter:drop-shadow(0 0 7px rgba(217,255,99,.72));
+    }
+    .refutation-arrow.answer-mode marker path{fill:var(--accent)}
+    .square.answer-piece .piece{animation:answerPieceGlow .9s ease-in-out infinite}
+    .square.answer-target{box-shadow:inset 0 0 0 5px rgba(217,255,99,.7)}
+    @keyframes answerPieceGlow{
+      0%,100%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 5px rgba(217,255,99,.35))}
+      50%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 13px rgba(217,255,99,.95))}
+    }
+
+    @media(max-width:430px){
+      .piece{font-size:clamp(25px,min(8.1vw,7.8vh),43px)}
+    }
+  </style>
 </head>
 <body>
   <div class="noise"></div>
@@ -81,7 +112,7 @@
             <span>Hint</span>
             <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           </button>
-          <button class="btn primary" id="revealBtn" type="button">Reveal key <span>→</span></button>
+          <button class="btn primary" id="revealBtn" type="button">Answer <span>→</span></button>
         </section>
 
         <section class="meta">
