@@ -1,7 +1,10 @@
-/* White success moves should feel physically played before the result is named. */
-.board.white-success-travel{pointer-events:none}
+/* White success moves should feel physically played before the result is named.
+   Keep the board hit-testable: the core resolves the release square with elementFromPoint(),
+   while interaction-polish already blocks real input during key-settling/mate-settling. */
+.board.white-success-travel{touch-action:none}
 .white-success-flyer{
   z-index:31;
+  pointer-events:none;
   filter:drop-shadow(0 7px 10px rgba(0,0,0,.28));
 }
 .white-success-flyer .piece{
