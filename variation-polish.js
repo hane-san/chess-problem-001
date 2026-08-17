@@ -60,7 +60,7 @@ function showResult(progress,{final=false,mateSan=''}={}){
     result.classList.add('next-ready');
     boardWrap?.classList.add('awaiting-next');
     const move = mateSan ? `${mateSan} · ` : '';
-    result.innerHTML=`<strong>CHECKMATE</strong><span>${move}この変化を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT DEFENCE</em>`;
+    result.innerHTML=`<strong>CHECKMATE</strong><span>${move}この変化を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT VARIATION</em>`;
   }
 
   requestAnimationFrame(()=>result.classList.add('is-visible'));
