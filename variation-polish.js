@@ -9,6 +9,8 @@ let impactTimer = null;
 let proofQueued = false;
 let awaitingNext = false;
 let advancing = false;
+let pendingSolvedLabel = null;
+let pendingMateDetail = null;
 
 const result = document.createElement('div');
 result.className = 'variation-result';
@@ -41,7 +43,7 @@ function closeResult(){
   boardWrap?.classList.remove('awaiting-next');
 }
 
-function showResult(progress,{final=false}={}){
+function showResult(progress,{final=false,mateSan=''}={}){
   if(resultTimer){clearTimeout(resultTimer);resultTimer=null;}
   awaitingNext=false;
   advancing=false;
@@ -57,7 +59,8 @@ function showResult(progress,{final=false}={}){
     awaitingNext=true;
     result.classList.add('next-ready');
     boardWrap?.classList.add('awaiting-next');
-    result.innerHTML=`<strong>MATE ✓</strong><span>この防御を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT DEFENCE</em>`;
+    const move = mateSan ? `${mateSan} · ` : '';
+    result.innerHTML=`<strong>CHECKMATE</strong><span>${move}この防御を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT DEFENCE</em>`;
   }
 
   requestAnimationFrame(()=>result.classList.add('is-visible'));
@@ -84,7 +87,7 @@ async function advanceToNext(){
   requestAnimationFrame(()=>next.click());
 }
 
-function celebrateVariation(newLabel){
+function celebrateVariation(newLabel,{mateSan=''}={}){
   requestAnimationFrame(()=>{
     const progress=parseProgress();
     const complete=progress.total>0 && progress.solved===progress.total;
@@ -106,7 +109,7 @@ function celebrateVariation(newLabel){
       setTimeout(()=>solvedButton.classList.remove('just-solved'),850);
     }
 
-    showResult(progress);
+    showResult(progress,{mateSan});
     if(navigator.vibrate) navigator.vibrate(complete?[18,40,24]:18);
 
     if(complete && !proofQueued){
@@ -126,13 +129,23 @@ function syncSolvedVariations(){
   if(current.size < seenDone.size){
     seenDone=current;
     proofQueued=false;
+    pendingSolvedLabel=null;
+    pendingMateDetail=null;
     closeResult();
     return;
   }
 
   const added=[...current].filter(label=>!seenDone.has(label));
   seenDone=current;
-  if(added.length) celebrateVariation(added[added.length-1]);
+  if(!added.length) return;
+
+  const newest=added[added.length-1];
+  if(document.body.classList.contains('mate-settling')){
+    pendingSolvedLabel=newest;
+    return;
+  }
+  celebrateVariation(newest,pendingMateDetail || {});
+  pendingMateDetail=null;
 }
 
 result.addEventListener('pointerup',event=>{
@@ -144,6 +157,16 @@ result.addEventListener('pointerup',event=>{
 document.addEventListener('pointerdown',event=>{
   if(event.target.closest?.('.defense-chip')) closeResult();
 },true);
+
+window.addEventListener('cp-mate-settled',event=>{
+  pendingMateDetail=event.detail || {};
+  if(pendingSolvedLabel){
+    const label=pendingSolvedLabel;
+    pendingSolvedLabel=null;
+    celebrateVariation(label,pendingMateDetail);
+    pendingMateDetail=null;
+  }
+});
 
 window.addEventListener('cp-proof-sweep-finished',()=>{
   showResult(parseProgress(),{final:true});
