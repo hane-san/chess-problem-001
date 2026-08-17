@@ -21,6 +21,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Syntax-check JavaScript
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            node --check "$file"
+          done < <(find . -type f -name '*.js' -not -path './_site/*' -not -path './.git/*' -print0)
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
