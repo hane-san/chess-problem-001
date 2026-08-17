@@ -76,7 +76,7 @@ function clearReplayClasses(square){
   square.classList.remove(
     'last','selected','hint-piece','refutation-piece','refutation-target','answer-piece','answer-target',
     'legal','capture-target','hover-target','defense-preview-target','defense-landed','defense-arrival',
-    'capture-impact','replay-key-source','replay-key-target','replay-defence-source','replay-defence-target'
+    'capture-impact','replay-key-source','replay-key-target','replay-key-landed','replay-defence-source','replay-defence-target'
   );
 }
 
@@ -131,7 +131,7 @@ function hideExistingArrow(){
   arrowSvg?.classList.remove('is-visible','answer-mode');
 }
 
-async function animateMove({uci,before,after,duration,kind,capture=false}){
+async function animateMove({uci,after,duration,kind,capture=false}){
   const from=uci.slice(0,2);
   const to=uci.slice(2,4);
   const fromSquare=squareEl(from);
@@ -233,7 +233,6 @@ async function playVariation(defense,button){
   showTurnCue('WHITE KEY',problem.key.san,'key-turn');
   await animateMove({
     uci:problem.key.uci,
-    before:initial,
     after:postKey,
     duration:KEY_TRAVEL_MS,
     kind:'key'
@@ -244,7 +243,6 @@ async function playVariation(defense,button){
   showTurnCue('BLACK DEFENCE',defense.blackSan,'defence');
   await animateMove({
     uci:defense.black,
-    before:postKey,
     after:postDefence,
     duration:DEFENCE_TRAVEL_MS,
     kind:'defence',
