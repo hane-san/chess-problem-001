@@ -14,11 +14,13 @@ const PIECE_CLASS = {
 };
 
 function normalizePieces(){
+  board?.querySelectorAll('.square').forEach(square=>square.classList.remove('king-square'));
   board?.querySelectorAll('.piece').forEach(piece=>{
     const type=PIECE_CLASS[piece.textContent?.trim()];
     if(!type) return;
     ['k','q','r','b','n','p'].forEach(t=>piece.classList.remove(`piece-${t}`));
     piece.classList.add(`piece-${type}`);
+    if(type==='k') piece.closest('.square')?.classList.add('king-square');
   });
 }
 
