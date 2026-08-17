@@ -1,28 +1,79 @@
-/* White's final mating move should feel like a resolved action, not an instant state swap. */
-.board.white-mate-travel{pointer-events:none}
-.white-mate-flyer{
+/* White success moves should feel physically played before the result is named. */
+.board.white-success-travel{pointer-events:none}
+.white-success-flyer{
   z-index:31;
   filter:drop-shadow(0 7px 10px rgba(0,0,0,.28));
 }
-.white-mate-flyer .piece{
+.white-success-flyer .piece{
   filter:drop-shadow(0 3px 2px rgba(0,0,0,.22)) drop-shadow(0 0 10px rgba(217,255,99,.34));
 }
+.square.white-key-target,
 .square.white-mate-target{
   box-shadow:inset 0 0 0 3px rgba(217,255,99,.42),inset 0 0 20px rgba(217,255,99,.12);
 }
 body.mate-settling .variation-result{pointer-events:none}
+body.key-settling .defense-grid{pointer-events:none}
 
-/* Checkmate appears after a short visual breath. */
-.turn-cue.proof-mate{
-  border-color:rgba(217,255,99,.52);
-  box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 22px rgba(217,255,99,.12);
+/* Key success is explicit, but quieter than the final checkmate. */
+.key-confirmation{
+  position:absolute;
+  left:50%;
+  top:50%;
+  z-index:37;
+  width:max-content;
+  max-width:82%;
+  padding:11px 16px 10px;
+  border:1px solid rgba(217,255,99,.38);
+  border-radius:12px;
+  background:rgba(9,12,10,.86);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 16px 40px rgba(0,0,0,.30),0 0 24px rgba(217,255,99,.10);
+  text-align:center;
+  opacity:0;
+  translate:-50% -44%;
+  transition:opacity .18s ease,translate .22s ease;
+  pointer-events:none;
 }
-.turn-cue.proof-mate small{color:var(--accent)}
+.key-confirmation.is-visible{opacity:1;translate:-50% -50%}
+.key-confirmation strong,.key-confirmation span{display:block}
+.key-confirmation strong{font:750 15px/1 Inter,system-ui,sans-serif;letter-spacing:.08em;color:#f5ffd8}
+.key-confirmation strong b{color:var(--accent)}
+.key-confirmation span{margin-top:5px;font:550 8px/1.35 'DM Mono',monospace;letter-spacing:.06em;color:#aeb99b}
+
+.turn-cue.key-found{
+  border-color:rgba(217,255,99,.48);
+  box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 20px rgba(217,255,99,.10);
+}
+.turn-cue.key-found small{color:var(--accent)}
+
+/* Checkmate is the strongest semantic state in the solving loop. */
+.turn-cue.checkmate{
+  border-color:rgba(217,255,99,.72);
+  background:rgba(8,12,8,.90);
+  box-shadow:0 10px 30px rgba(0,0,0,.32),0 0 32px rgba(217,255,99,.18);
+}
+.turn-cue.checkmate small{color:var(--accent);letter-spacing:.18em}
+.turn-cue.checkmate strong{font-size:13px;color:#f7ffdf}
+
+.variation-result.next-ready{
+  border-color:rgba(217,255,99,.66)!important;
+  background:rgba(8,12,9,.92)!important;
+  box-shadow:0 18px 48px rgba(0,0,0,.38),0 0 34px rgba(217,255,99,.16)!important;
+}
 .variation-result.next-ready strong{
-  letter-spacing:.08em;
-  color:#f6ffd8;
+  font-size:20px!important;
+  letter-spacing:.10em!important;
+  color:#f7ffdc!important;
+}
+.variation-result.next-ready span{margin-top:7px!important;color:#c1cbaa!important}
+
+@media(max-width:900px){
+  .key-confirmation{padding:10px 14px 9px}
+  .key-confirmation strong{font-size:14px}
+  .variation-result.next-ready strong{font-size:18px!important}
 }
 
 @media(prefers-reduced-motion:reduce){
-  .white-mate-flyer{transition:none!important}
+  .white-success-flyer,.key-confirmation{transition:none!important}
 }
