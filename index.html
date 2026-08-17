@@ -10,28 +10,38 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="visual-polish.css" />
   <style>
-    /* Optical sizing for Unicode chess glyphs. */
+    /* Optical sizing: make the silhouettes readable at a glance.
+       pawn < knight < bishop/rook < queen/king */
     .piece{
-      width:84%;
-      height:84%;
+      width:86%;
+      height:86%;
       font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","Arial Unicode MS",serif;
-      font-size:clamp(26px,min(7.9vw,7.9vh),59px);
+      font-size:clamp(28px,min(8.1vw,8.1vh),60px);
       line-height:1;
       transform:translateY(0);
       transform-origin:center;
+      font-weight:400;
     }
-    .piece.piece-k{transform:scale(.96) translateY(-1%)}
-    .piece.piece-q{transform:scale(.94) translateY(0)}
-    .piece.piece-r{transform:scale(.89) translateY(1%)}
-    .piece.piece-b{transform:scale(.93) translateY(0)}
-    .piece.piece-n{transform:scale(.95) translateY(1%)}
-    .piece.piece-p{transform:scale(.84) translateY(2%)}
-    .square.selected .piece.piece-k{transform:scale(.96) translateY(-1%)}
-    .square.selected .piece.piece-q{transform:scale(.94) translateY(0)}
-    .square.selected .piece.piece-r{transform:scale(.89) translateY(1%)}
-    .square.selected .piece.piece-b{transform:scale(.93) translateY(0)}
-    .square.selected .piece.piece-n{transform:scale(.95) translateY(1%)}
-    .square.selected .piece.piece-p{transform:scale(.84) translateY(2%)}
+    .piece.piece-k{font-size:clamp(30px,min(8.55vw,8.55vh),64px);transform:translateY(-1%)}
+    .piece.piece-q{font-size:clamp(30px,min(8.45vw,8.45vh),63px);transform:translateY(0)}
+    .piece.piece-r{font-size:clamp(28px,min(7.8vw,7.8vh),58px);transform:translateY(1%)}
+    .piece.piece-b{font-size:clamp(28px,min(7.8vw,7.8vh),58px);transform:translateY(0)}
+    .piece.piece-n{font-size:clamp(26px,min(7.25vw,7.25vh),54px);transform:translateY(1%)}
+    .piece.piece-p{font-size:clamp(23px,min(6.35vw,6.35vh),47px);transform:translateY(2%)}
+    .square.selected .piece.piece-k{transform:translateY(-1%)}
+    .square.selected .piece.piece-q{transform:translateY(0)}
+    .square.selected .piece.piece-r{transform:translateY(1%)}
+    .square.selected .piece.piece-b{transform:translateY(0)}
+    .square.selected .piece.piece-n{transform:translateY(1%)}
+    .square.selected .piece.piece-p{transform:translateY(2%)}
+    .piece.white{
+      -webkit-text-stroke:.28px rgba(26,28,27,.74);
+      text-shadow:0 1px 0 rgba(28,31,29,.82),0 0 2px rgba(12,14,13,.46);
+    }
+    .piece.black{
+      -webkit-text-stroke:.18px rgba(241,244,234,.18);
+      text-shadow:0 1px 0 rgba(255,255,255,.18),0 0 1px rgba(255,255,255,.20);
+    }
 
     /* Keep the proposition readable without making the explanatory phrase the hero. */
     .problem-head h1 .headline-prefix{
@@ -86,7 +96,11 @@
       .problem-head p{grid-column:1!important}
     }
     @media(max-width:430px){
-      .piece{font-size:clamp(25px,min(8.35vw,7.9vh),45px)}
+      .piece.piece-k{font-size:clamp(29px,min(8.9vw,8.25vh),48px)}
+      .piece.piece-q{font-size:clamp(29px,min(8.8vw,8.2vh),47px)}
+      .piece.piece-r,.piece.piece-b{font-size:clamp(27px,min(8.1vw,7.6vh),44px)}
+      .piece.piece-n{font-size:clamp(25px,min(7.55vw,7.1vh),41px)}
+      .piece.piece-p{font-size:clamp(22px,min(6.7vw,6.3vh),36px)}
     }
   </style>
 </head>
@@ -181,5 +195,6 @@
   <script type="module" src="ui-polish.js"></script>
   <script type="module" src="motion-polish.js"></script>
   <script type="module" src="variation-polish.js"></script>
+  <script src="viewport-polish.js"></script>
 </body>
 </html>
