@@ -61,6 +61,9 @@ function cancelHold(){
 }
 
 board?.addEventListener('pointerdown', event=>{
+  // Success animations replay a clean pointer sequence into the core app after the
+  // visual move has finished. Let that sequence pass straight through this wrapper.
+  if(document.body.classList.contains('programmatic-commit')) return;
   if(bypass) return;
   const square = movableWhiteSquare(event.target);
   event.preventDefault();
@@ -86,14 +89,13 @@ board?.addEventListener('pointerdown', event=>{
     if(!gesture || gesture.id !== event.pointerId || !interactionEnabled()) return;
     gesture.activated = true;
     board.classList.add('hold-active');
-    // The core app now selects the piece and calculates its complete legal range.
-    // This path is identical for the Key and for White's mating move.
     emitPointer('pointerdown', gesture.source, gesture.latest);
     if(navigator.vibrate) navigator.vibrate(7);
   }, HOLD_MS);
 }, true);
 
 board?.addEventListener('pointermove', event=>{
+  if(document.body.classList.contains('programmatic-commit')) return;
   if(bypass || !gesture || gesture.id !== event.pointerId) return;
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -103,6 +105,7 @@ board?.addEventListener('pointermove', event=>{
 }, true);
 
 board?.addEventListener('pointerup', event=>{
+  if(document.body.classList.contains('programmatic-commit')) return;
   if(bypass || !gesture || gesture.id !== event.pointerId) return;
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -120,6 +123,7 @@ board?.addEventListener('pointerup', event=>{
 }, true);
 
 board?.addEventListener('pointercancel', event=>{
+  if(document.body.classList.contains('programmatic-commit')) return;
   if(bypass || !gesture || gesture.id !== event.pointerId) return;
   event.preventDefault();
   event.stopImmediatePropagation();
