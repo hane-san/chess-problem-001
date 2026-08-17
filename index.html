@@ -73,7 +73,7 @@
         <div class="problem-kicker">
           <span id="problemId">CP—0001</span>
           <span class="divider"></span>
-          <span>白番 · 2手詰</span>
+          <span>#2 · 白の2手目で詰み</span>
         </div>
         <div class="board-wrap">
           <div id="board" class="board" aria-label="チェスプロブレム盤面"></div>
@@ -88,8 +88,8 @@
           <div class="board-glow"></div>
         </div>
         <div class="board-foot">
-          <div><span class="label">問題</span><strong>#2</strong></div>
-          <div><span class="label">タイプ</span><strong>待ち</strong></div>
+          <div><span class="label">形式</span><strong>#2</strong></div>
+          <div><span class="label">テーマ</span><strong>Waiting</strong></div>
           <div><span class="label">難易度</span><strong>2 / 5</strong></div>
         </div>
       </div>
@@ -97,26 +97,26 @@
       <aside class="panel">
         <section class="problem-head">
           <div class="eyebrow">PROBLEM 001 · D. J. SHIRE</div>
-          <h1>2手目で、<em>必ず詰ませる。</em></h1>
-          <p>白の初手を1手 → 黒の返しを見る → 白の2手目で詰み。まずは最初の1手を探します。</p>
+          <h1>白の2手目で、<em>必ず詰ませる。</em></h1>
+          <p>初手を決め、黒の防御を1つずつ確かめ、どの変化にも白の2手目の詰みがあることを示します。</p>
         </section>
 
         <section id="phaseCard" class="phase-card">
           <div class="phase-index">01</div>
           <div>
             <span class="label">いまやること</span>
-            <h2 id="phaseTitle">① 初手を探す</h2>
+            <h2 id="phaseTitle">① 初手（Key）を探す</h2>
             <p id="phaseText" class="is-hidden" aria-hidden="true"></p>
           </div>
         </section>
 
         <section id="feedback" class="feedback neutral" aria-live="polite">
           <div class="feedback-icon">○</div>
-          <div><strong>白の初手を考えてみましょう。</strong><span>ヒントONなら、動かす駒だけが光っています。</span></div>
+          <div><strong>まず、白のKeyを探します。</strong><span>ヒントONなら、動かす駒だけが光っています。</span></div>
         </section>
 
         <section id="defenseSection" class="defense-section is-hidden">
-          <div class="section-title"><span>黒の返し</span><small id="defenseCount">0 / 8</small></div>
+          <div class="section-title"><span>黒の防御 · DEFENCES</span><small id="defenseCount">0 / 8</small></div>
           <div id="defenseGrid" class="defense-grid"></div>
         </section>
 
@@ -138,7 +138,7 @@
 
     <footer>
       <span>MATE / TWO</span>
-      <span>#2 · CP—0001</span>
+      <span>#2 · KEY → DEFENCE → MATE</span>
     </footer>
   </main>
   <script type="module" src="app.js"></script>
