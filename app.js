@@ -7,6 +7,7 @@ const DRAG_THRESHOLD_PX = 7;
 const REFUTATION_DELAY_MS = 500;
 const REFUTATION_MOVE_MS = 1050;
 const REFUTATION_RESET_MS = 2250;
+const ANSWER_PREVIEW_MS = 1250;
 const problem = problems[0];
 
 let board = parseFen(problem.fen);
@@ -23,6 +24,8 @@ let hintEnabled = readHintPreference();
 let hintSquare = null;
 let refutationFrom = null;
 let refutationTo = null;
+let answerFrom = null;
+let answerTo = null;
 let isShowingRefutation = false;
 let demoTimers = [];
 
@@ -37,6 +40,7 @@ const defenseCount = document.querySelector('#defenseCount');
 const hintToggle = document.querySelector('#hintToggle');
 const arrowSvg = document.querySelector('#refutationArrow');
 const arrowLine = document.querySelector('#refutationLine');
+const revealBtn = document.querySelector('#revealBtn');
 
 function parseFen(fen){
   const rows=fen.split(' ')[0].split('/');
@@ -114,6 +118,7 @@ function updateHintToggle(){
 }
 
 function toggleHint(){
+  if(isShowingRefutation) return;
   hintEnabled=!hintEnabled;
   saveHintPreference();
   syncHint();
@@ -164,6 +169,7 @@ function render(){
   });
   updateMarkers();
   if(refutationFrom&&refutationTo) requestAnimationFrame(()=>showRefutationArrow(refutationFrom,refutationTo));
+  if(answerFrom&&answerTo) requestAnimationFrame(()=>showAnswerArrow(answerFrom,answerTo));
 }
 
 function updateMarkers(){
@@ -173,6 +179,8 @@ function updateMarkers(){
     el.classList.toggle('hint-piece',sq===hintSquare);
     el.classList.toggle('refutation-piece',sq===refutationFrom);
     el.classList.toggle('refutation-target',sq===refutationTo);
+    el.classList.toggle('answer-piece',sq===answerFrom);
+    el.classList.toggle('answer-target',sq===answerTo);
     el.classList.remove('legal','capture-target','hover-target');
     const move=legalMoveTo(sq);
     if(move){
@@ -339,6 +347,7 @@ function attemptMove(from,to){
       renderDefenses();
       if(solvedDefenses.size===problem.defenses.length) completeProblem();
       render();
+      syncHint();
       return;
     }
     const refutation=findReplyAfterWrongMate(from,to);
@@ -351,6 +360,8 @@ function startRefutationDemo({from,to,refutation,kind}){
   isShowingRefutation=true;
   clearSelection();
   hintSquare=null;
+  answerFrom=null;
+  answerTo=null;
   hideRefutationArrow();
   refutationFrom=null;
   refutationTo=null;
@@ -400,6 +411,8 @@ function finishRefutationDemo(){
   isShowingRefutation=false;
   refutationFrom=null;
   refutationTo=null;
+  answerFrom=null;
+  answerTo=null;
   hideRefutationArrow();
   restoreBaseBoard();
   selected=null;
@@ -414,7 +427,7 @@ function clearDemoTimers(){
   demoTimers=[];
 }
 
-function showRefutationArrow(from,to){
+function positionArrow(from,to,mode='refutation'){
   const fromEl=boardEl.querySelector(`[data-square="${from}"]`);
   const toEl=boardEl.querySelector(`[data-square="${to}"]`);
   if(!fromEl||!toEl) return;
@@ -432,11 +445,15 @@ function showRefutationArrow(from,to){
   arrowLine.setAttribute('y1',y1);
   arrowLine.setAttribute('x2',x2);
   arrowLine.setAttribute('y2',y2);
+  arrowSvg.classList.toggle('answer-mode',mode==='answer');
   arrowSvg.classList.add('is-visible');
 }
 
+function showRefutationArrow(from,to){positionArrow(from,to,'refutation');}
+function showAnswerArrow(from,to){positionArrow(from,to,'answer');}
+
 function hideRefutationArrow(){
-  arrowSvg.classList.remove('is-visible');
+  arrowSvg.classList.remove('is-visible','answer-mode');
 }
 
 function movePiece(uci){
@@ -496,12 +513,15 @@ function updatePhase(){
   if(phase==='key'){
     phaseIndex.textContent='01';
     phaseTitle.textContent='Find the key';
+    revealBtn.disabled=false;
   }else if(phase==='defenses'){
     phaseIndex.textContent='02';
     phaseTitle.textContent='Test every defence';
+    revealBtn.disabled=false;
   }else if(phase==='mate'){
     phaseIndex.textContent='03';
     phaseTitle.textContent='Finish the line';
+    revealBtn.disabled=false;
   }
 }
 
@@ -517,6 +537,8 @@ function reset(){
   isShowingRefutation=false;
   refutationFrom=null;
   refutationTo=null;
+  answerFrom=null;
+  answerTo=null;
   hideRefutationArrow();
   board=parseFen(problem.fen);
   selected=null;
@@ -535,23 +557,63 @@ function reset(){
 
 function reveal(){
   if(isShowingRefutation) return;
+  clearDemoTimers();
   clearSelection();
+
+  let uci=null;
+  let san='';
+  let explanation='';
+  let kind=null;
+
   if(phase==='key'){
-    movePiece(problem.key.uci);
-    onKeySolved();
-    render();
+    uci=problem.key.uci;
+    san=problem.key.san;
+    explanation=problem.key.note;
+    kind='key';
   }else if(phase==='mate'&&activeDefense){
+    uci=activeDefense.mate;
+    san=activeDefense.mateSan;
+    explanation=activeDefense.note;
+    kind='mate';
+  }else{
+    showFeedback('neutral','i','Choose a defence.','黒の応手をひとつ選ぶと、その局面の答えを表示できます。');
+    return;
+  }
+
+  isShowingRefutation=true;
+  hintSquare=null;
+  refutationFrom=null;
+  refutationTo=null;
+  answerFrom=uci.slice(0,2);
+  answerTo=uci.slice(2,4);
+  updateMarkers();
+  showAnswerArrow(answerFrom,answerTo);
+  showFeedback('good','→',san,explanation);
+
+  demoTimers.push(setTimeout(()=>{
+    hideRefutationArrow();
+    answerFrom=null;
+    answerTo=null;
+    isShowingRefutation=false;
+
+    if(kind==='key'){
+      board=parseFen(problem.fen);
+      movePiece(problem.key.uci);
+      onKeySolved();
+      render();
+      return;
+    }
+
     movePiece(activeDefense.mate);
     solvedDefenses.add(activeDefense.id);
-    showFeedback('good','✓',`${activeDefense.mateSan} — revealed.`,activeDefense.note);
+    showFeedback('good','✓',`${activeDefense.mateSan} — mate.`,activeDefense.note);
     phase='defenses';
     updatePhase();
     renderDefenses();
     render();
     syncHint();
-  }else{
-    showFeedback('neutral','i','Choose a defence.','黒の応手をひとつ選ぶと、その局面のmateを考えられます。');
-  }
+    if(solvedDefenses.size===problem.defenses.length) completeProblem();
+  },ANSWER_PREVIEW_MS));
 }
 
 function completeProblem(){
@@ -568,7 +630,7 @@ boardEl.addEventListener('selectstart',e=>e.preventDefault());
 boardEl.addEventListener('dragstart',e=>e.preventDefault());
 
 document.querySelector('#resetBtn').addEventListener('click',reset);
-document.querySelector('#revealBtn').addEventListener('click',reveal);
+revealBtn.addEventListener('click',reveal);
 hintToggle.addEventListener('click',toggleHint);
 document.querySelector('#flipBtn').addEventListener('click',()=>{
   if(isShowingRefutation) return;
