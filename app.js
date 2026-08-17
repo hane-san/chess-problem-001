@@ -4,7 +4,9 @@ import { problems } from './data/problems.js';
 const PIECES = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const FILES = 'abcdefgh';
 const DRAG_THRESHOLD_PX = 7;
-const HINT_GLOW_MS = 2400;
+const REFUTATION_DELAY_MS = 500;
+const REFUTATION_MOVE_MS = 1050;
+const REFUTATION_RESET_MS = 2250;
 const problem = problems[0];
 
 let board = parseFen(problem.fen);
@@ -17,8 +19,12 @@ let phase = 'key';
 let activeDefense = null;
 let solvedDefenses = new Set();
 let lastMove = [];
+let hintEnabled = readHintPreference();
 let hintSquare = null;
-let hintTimer = null;
+let refutationFrom = null;
+let refutationTo = null;
+let isShowingRefutation = false;
+let demoTimers = [];
 
 const boardEl = document.querySelector('#board');
 const feedback = document.querySelector('#feedback');
@@ -28,6 +34,9 @@ const phaseIndex = document.querySelector('.phase-index');
 const defenseSection = document.querySelector('#defenseSection');
 const defenseGrid = document.querySelector('#defenseGrid');
 const defenseCount = document.querySelector('#defenseCount');
+const hintToggle = document.querySelector('#hintToggle');
+const arrowSvg = document.querySelector('#refutationArrow');
+const arrowLine = document.querySelector('#refutationLine');
 
 function parseFen(fen){
   const rows=fen.split(' ')[0].split('/');
@@ -49,9 +58,24 @@ function squareOrder(){
 }
 
 function pieceColor(p){return p===p.toUpperCase()?'white':'black';}
-function canMovePiece(p){return (phase==='key'||phase==='mate')&&pieceColor(p)==='white';}
+function canMovePiece(p){return !isShowingRefutation&&(phase==='key'||phase==='mate')&&pieceColor(p)==='white';}
 
-function engineForCurrentPosition(){
+function readHintPreference(){
+  try{return localStorage.getItem('cp-hint-enabled')!=='false';}
+  catch{return true;}
+}
+
+function saveHintPreference(){
+  try{localStorage.setItem('cp-hint-enabled',hintEnabled?'true':'false');}catch{}
+}
+
+function moveSpec(move){
+  const spec={from:move.from,to:move.to};
+  if(move.promotion) spec.promotion=move.promotion;
+  return spec;
+}
+
+function baseEngine(){
   const chess=new Chess(problem.fen);
   if(phase==='mate'&&activeDefense){
     chess.move({from:problem.key.uci.slice(0,2),to:problem.key.uci.slice(2,4)});
@@ -60,35 +84,44 @@ function engineForCurrentPosition(){
   return chess;
 }
 
+function restoreBaseBoard(){
+  board=parseFen(baseEngine().fen());
+  lastMove=[];
+}
+
 function legalMovesFrom(sq){
-  if(!(phase==='key'||phase==='mate')) return [];
-  try{
-    return engineForCurrentPosition().moves({square:sq,verbose:true});
-  }catch{
-    return [];
-  }
+  if(!(phase==='key'||phase==='mate')||isShowingRefutation) return [];
+  try{return baseEngine().moves({square:sq,verbose:true});}
+  catch{return [];}
 }
 
-function clearHint(){
-  if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
-  hintSquare=null;
+function currentHintSquare(){
+  if(!hintEnabled||isShowingRefutation) return null;
+  if(phase==='key') return problem.key.uci.slice(0,2);
+  if(phase==='mate'&&activeDefense) return activeDefense.mate.slice(0,2);
+  return null;
 }
 
-function showPieceHint(sq){
-  clearHint();
-  hintSquare=sq;
+function syncHint(){
+  hintSquare=currentHintSquare();
+  updateHintToggle();
   updateMarkers();
-  hintTimer=setTimeout(()=>{
-    hintSquare=null;
-    hintTimer=null;
-    updateMarkers();
-  },HINT_GLOW_MS);
+}
+
+function updateHintToggle(){
+  hintToggle.classList.toggle('is-on',hintEnabled);
+  hintToggle.setAttribute('aria-checked',hintEnabled?'true':'false');
+}
+
+function toggleHint(){
+  hintEnabled=!hintEnabled;
+  saveHintPreference();
+  syncHint();
 }
 
 function selectSquare(sq){
   const p=board[sq];
   if(!p||!canMovePiece(p)) return false;
-  clearHint();
   selected=sq;
   legalMoves=legalMovesFrom(sq);
   hoverTarget=null;
@@ -130,6 +163,7 @@ function render(){
     boardEl.append(div);
   });
   updateMarkers();
+  if(refutationFrom&&refutationTo) requestAnimationFrame(()=>showRefutationArrow(refutationFrom,refutationTo));
 }
 
 function updateMarkers(){
@@ -137,6 +171,8 @@ function updateMarkers(){
     const sq=el.dataset.square;
     el.classList.toggle('selected',sq===selected);
     el.classList.toggle('hint-piece',sq===hintSquare);
+    el.classList.toggle('refutation-piece',sq===refutationFrom);
+    el.classList.toggle('refutation-target',sq===refutationTo);
     el.classList.remove('legal','capture-target','hover-target');
     const move=legalMoveTo(sq);
     if(move){
@@ -153,6 +189,7 @@ function squareAtPoint(x,y){
 }
 
 function beginPointer(e){
+  if(isShowingRefutation) return;
   if(e.button!==undefined&&e.button!==0) return;
   const sq=e.target.closest('.square')?.dataset.square;
   if(!sq) return;
@@ -176,7 +213,7 @@ function beginPointer(e){
 }
 
 function movePointer(e){
-  if(!gesture||gesture.id!==e.pointerId||!selected) return;
+  if(!gesture||gesture.id!==e.pointerId||!selected||isShowingRefutation) return;
   e.preventDefault();
   if(Math.hypot(e.clientX-gesture.startX,e.clientY-gesture.startY)>DRAG_THRESHOLD_PX) gesture.moved=true;
   const sq=squareAtPoint(e.clientX,e.clientY);
@@ -185,7 +222,7 @@ function movePointer(e){
 }
 
 function endPointer(e){
-  if(!gesture||gesture.id!==e.pointerId) return;
+  if(!gesture||gesture.id!==e.pointerId||isShowingRefutation) return;
   e.preventDefault();
   const old=gesture;
   gesture=null;
@@ -219,39 +256,76 @@ function endPointer(e){
   updateMarkers();
 }
 
-function cancelPointer(){gesture=null;hoverTarget=null;updateMarkers();}
+function cancelPointer(){
+  gesture=null;
+  hoverTarget=null;
+  updateMarkers();
+}
 
 function commitSelectedMove(to){
-  if(!selected||!legalMoveTo(to)) return;
+  if(!selected||!legalMoveTo(to)||isShowingRefutation) return;
   const from=selected;
-  clearHint();
   selected=null;
   legalMoves=[];
   hoverTarget=null;
   if(navigator.vibrate) navigator.vibrate(12);
   attemptMove(from,to);
-  render();
 }
 
-function movePiece(uci){
-  const from=uci.slice(0,2),to=uci.slice(2,4);
-  if(!board[from]) return false;
-  board[to]=board[from];
-  delete board[from];
-  lastMove=[from,to];
-  return true;
+function mateInOneExists(chess){
+  return chess.moves({verbose:true}).some(move=>{
+    const next=new Chess(chess.fen());
+    next.move(moveSpec(move));
+    return next.isCheckmate();
+  });
+}
+
+function findKeyRefutation(from,to){
+  try{
+    const chess=new Chess(problem.fen);
+    chess.move({from,to});
+    for(const blackMove of chess.moves({verbose:true})){
+      const afterDefense=new Chess(chess.fen());
+      afterDefense.move(moveSpec(blackMove));
+      if(!mateInOneExists(afterDefense)) return blackMove;
+    }
+  }catch{}
+  return null;
+}
+
+function findReplyAfterWrongMate(from,to){
+  try{
+    const chess=baseEngine();
+    chess.move({from,to});
+    if(chess.isCheckmate()) return null;
+    const replies=chess.moves({verbose:true});
+    replies.sort((a,b)=>replyScore(b)-replyScore(a));
+    return replies[0]||null;
+  }catch{
+    return null;
+  }
+}
+
+function replyScore(move){
+  let score=0;
+  if(move.san.includes('+')) score+=4;
+  if(move.captured) score+=2;
+  if(move.san.includes('x')) score+=1;
+  return score;
 }
 
 function attemptMove(from,to){
   const uci=from+to;
   if(phase==='key'){
-    if(uci===problem.key.uci){movePiece(uci);onKeySolved();return;}
-    const knownTry=problem.tries.find(t=>t.uci===uci);
-    if(knownTry){
-      showFeedback('bad','×',`${knownTry.san} — a convincing try`,`${knownTry.refutation} が一手だけ残るため失敗。盤面は元に戻しました。`);
+    if(uci===problem.key.uci){
+      board=parseFen(problem.fen);
+      movePiece(uci);
+      onKeySolved();
+      render();
       return;
     }
-    showFeedback('bad','×','Legal, but not the key.','合法手ではありますが、黒のすべての応手に対して2手目のmateを保証できません。');
+    const refutation=findKeyRefutation(from,to);
+    startRefutationDemo({from,to,refutation,kind:'key'});
     return;
   }
 
@@ -264,20 +338,124 @@ function attemptMove(from,to){
       updatePhase();
       renderDefenses();
       if(solvedDefenses.size===problem.defenses.length) completeProblem();
+      render();
       return;
     }
-    showFeedback('bad','×','Legal, but not mate.','この防御に対する2手目としては詰みになりません。もう一度探してください。');
+    const refutation=findReplyAfterWrongMate(from,to);
+    startRefutationDemo({from,to,refutation,kind:'mate'});
   }
+}
+
+function startRefutationDemo({from,to,refutation,kind}){
+  clearDemoTimers();
+  isShowingRefutation=true;
+  clearSelection();
+  hintSquare=null;
+  hideRefutationArrow();
+  refutationFrom=null;
+  refutationTo=null;
+
+  const attemptEngine=baseEngine();
+  try{attemptEngine.move({from,to});}catch{
+    isShowingRefutation=false;
+    restoreBaseBoard();
+    syncHint();
+    render();
+    return;
+  }
+
+  board=parseFen(attemptEngine.fen());
+  lastMove=[from,to];
+  render();
+
+  if(kind==='key') showFeedback('bad','×','Not the key.','黒にこの手を壊す応手があります。');
+  else showFeedback('bad','×','Not mate.','黒にまだ応手が残っています。');
+
+  if(!refutation){
+    demoTimers.push(setTimeout(()=>finishRefutationDemo(),REFUTATION_RESET_MS));
+    return;
+  }
+
+  demoTimers.push(setTimeout(()=>{
+    refutationFrom=refutation.from;
+    refutationTo=refutation.to;
+    updateMarkers();
+    showRefutationArrow(refutationFrom,refutationTo);
+    if(kind==='key') showFeedback('bad','↯',refutation.san,'この黒手のあと、白は次の1手で詰ませられません。');
+    else showFeedback('bad','↯',refutation.san,'黒がこう応じられるので、まだmateではありません。');
+  },REFUTATION_DELAY_MS));
+
+  demoTimers.push(setTimeout(()=>{
+    try{attemptEngine.move(moveSpec(refutation));}catch{}
+    board=parseFen(attemptEngine.fen());
+    lastMove=[refutation.from,refutation.to];
+    render();
+  },REFUTATION_MOVE_MS));
+
+  demoTimers.push(setTimeout(()=>finishRefutationDemo(),REFUTATION_RESET_MS));
+}
+
+function finishRefutationDemo(){
+  clearDemoTimers();
+  isShowingRefutation=false;
+  refutationFrom=null;
+  refutationTo=null;
+  hideRefutationArrow();
+  restoreBaseBoard();
+  selected=null;
+  legalMoves=[];
+  hoverTarget=null;
+  render();
+  syncHint();
+}
+
+function clearDemoTimers(){
+  demoTimers.forEach(clearTimeout);
+  demoTimers=[];
+}
+
+function showRefutationArrow(from,to){
+  const fromEl=boardEl.querySelector(`[data-square="${from}"]`);
+  const toEl=boardEl.querySelector(`[data-square="${to}"]`);
+  if(!fromEl||!toEl) return;
+
+  const boardRect=boardEl.getBoundingClientRect();
+  const a=fromEl.getBoundingClientRect();
+  const b=toEl.getBoundingClientRect();
+  const x1=a.left-boardRect.left+a.width/2;
+  const y1=a.top-boardRect.top+a.height/2;
+  const x2=b.left-boardRect.left+b.width/2;
+  const y2=b.top-boardRect.top+b.height/2;
+
+  arrowSvg.setAttribute('viewBox',`0 0 ${boardRect.width} ${boardRect.height}`);
+  arrowLine.setAttribute('x1',x1);
+  arrowLine.setAttribute('y1',y1);
+  arrowLine.setAttribute('x2',x2);
+  arrowLine.setAttribute('y2',y2);
+  arrowSvg.classList.add('is-visible');
+}
+
+function hideRefutationArrow(){
+  arrowSvg.classList.remove('is-visible');
+}
+
+function movePiece(uci){
+  const from=uci.slice(0,2),to=uci.slice(2,4);
+  if(!board[from]) return false;
+  board[to]=board[from];
+  delete board[from];
+  lastMove=[from,to];
+  return true;
 }
 
 function onKeySolved(){
   phase='defenses';
-  clearHint();
   clearSelection();
   showFeedback('good','✓',`${problem.key.san} — key found.`,problem.key.note);
   defenseSection.classList.remove('is-hidden');
   renderDefenses();
   updatePhase();
+  syncHint();
 }
 
 function renderDefenses(){
@@ -289,14 +467,14 @@ function renderDefenses(){
     b.textContent=d.label;
     if(solvedDefenses.has(d.id)) b.classList.add('done');
     if(activeDefense?.id===d.id&&phase==='mate') b.classList.add('active');
-    b.disabled=solvedDefenses.has(d.id);
+    b.disabled=solvedDefenses.has(d.id)||isShowingRefutation;
     b.addEventListener('click',()=>chooseDefense(d));
     defenseGrid.append(b);
   });
 }
 
 function chooseDefense(d){
-  clearHint();
+  if(isShowingRefutation) return;
   board=parseFen(problem.fen);
   movePiece(problem.key.uci);
   movePiece(d.black);
@@ -309,6 +487,7 @@ function chooseDefense(d){
   updatePhase();
   renderDefenses();
   render();
+  syncHint();
 }
 
 function updatePhase(){
@@ -334,7 +513,11 @@ function showFeedback(type,icon,title,text){
 }
 
 function reset(){
-  clearHint();
+  clearDemoTimers();
+  isShowingRefutation=false;
+  refutationFrom=null;
+  refutationTo=null;
+  hideRefutationArrow();
   board=parseFen(problem.fen);
   selected=null;
   legalMoves=[];
@@ -347,10 +530,11 @@ function reset(){
   showFeedback('neutral','○','Quietly inspect the position.','まずは黒王の周囲を見る。');
   updatePhase();
   render();
+  syncHint();
 }
 
 function reveal(){
-  clearHint();
+  if(isShowingRefutation) return;
   clearSelection();
   if(phase==='key'){
     movePiece(problem.key.uci);
@@ -364,16 +548,9 @@ function reveal(){
     updatePhase();
     renderDefenses();
     render();
+    syncHint();
   }else{
     showFeedback('neutral','i','Choose a defence.','黒の応手をひとつ選ぶと、その局面のmateを考えられます。');
-  }
-}
-
-function hint(){
-  if(phase==='key'){
-    showPieceHint(problem.key.uci.slice(0,2));
-  }else if(phase==='mate'&&activeDefense){
-    showPieceHint(activeDefense.mate.slice(0,2));
   }
 }
 
@@ -392,15 +569,17 @@ boardEl.addEventListener('dragstart',e=>e.preventDefault());
 
 document.querySelector('#resetBtn').addEventListener('click',reset);
 document.querySelector('#revealBtn').addEventListener('click',reveal);
-document.querySelector('#hintBtn').addEventListener('click',hint);
+hintToggle.addEventListener('click',toggleHint);
 document.querySelector('#flipBtn').addEventListener('click',()=>{
-  clearHint();
+  if(isShowingRefutation) return;
   orientation=orientation==='white'?'black':'white';
   selected=null;
   legalMoves=[];
   hoverTarget=null;
   render();
+  syncHint();
 });
 
 render();
 updatePhase();
+syncHint();
