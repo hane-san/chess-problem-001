@@ -9,6 +9,7 @@
   <title>チェスプロブレム #2 — MATE / TWO</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="visual-polish.css" />
+  <link rel="stylesheet" href="interaction-polish.css" />
   <style>
     /* Optical sizing: make the silhouettes readable at a glance.
        pawn < knight < bishop/rook < queen/king */
@@ -162,7 +163,7 @@
 
         <section id="feedback" class="feedback neutral" aria-live="polite">
           <div class="feedback-icon">○</div>
-          <div><strong>まず、白のKeyを探します。</strong><span>ヒントONなら、動かす駒だけが光っています。</span></div>
+          <div><strong>まず、白のKeyを探します。</strong><span>駒を長押しすると、その間だけ合法手が見えます。</span></div>
         </section>
 
         <section id="defenseSection" class="defense-section is-hidden">
@@ -195,6 +196,8 @@
   <script type="module" src="ui-polish.js"></script>
   <script type="module" src="motion-polish.js"></script>
   <script type="module" src="variation-polish.js"></script>
+  <script src="interaction-polish.js"></script>
+  <script src="mistake-polish.js"></script>
   <script src="viewport-polish.js"></script>
 </body>
 </html>
