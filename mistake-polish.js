@@ -1,7 +1,6 @@
 const board = document.querySelector('#board');
 const feedback = document.querySelector('#feedback');
 const arrow = document.querySelector('#refutationArrow');
-const turnCue = document.querySelector('.turn-cue');
 const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
 const PIECE_CLASS = {
@@ -71,13 +70,15 @@ function inferMove(before,after){
 
 function squareEl(square){ return board?.querySelector(`[data-square="${square}"]`); }
 function wait(ms){ return new Promise(resolve=>setTimeout(resolve,ms)); }
+function cueEl(){ return document.querySelector('.turn-cue'); }
 
 function cue(title){
+  const turnCue=cueEl();
   if(!turnCue) return;
   turnCue.className='turn-cue rewind is-visible';
   turnCue.innerHTML=`<small>REWIND</small><strong>${title}</strong>`;
 }
-function hideCue(){ turnCue?.classList.remove('is-visible'); }
+function hideCue(){ cueEl()?.classList.remove('is-visible'); }
 
 async function reverseMove(forward,beforeMap,duration){
   if(!forward){ paint(beforeMap); return; }
