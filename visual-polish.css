@@ -52,7 +52,7 @@
   border-radius:4px;
 }
 
-/* Defence selection is a small scene: reset the story, replay the key, then show Black's branch. */
+/* Defence selection is a small scene: return to the post-key branch point, then show a new Black branch. */
 .turn-cue{
   position:absolute;
   left:50%;
@@ -84,6 +84,12 @@
 .turn-cue.defence small{color:#aab9c9}
 .turn-cue.white-turn{border-color:rgba(217,255,99,.46);box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 18px rgba(217,255,99,.10)}
 .turn-cue.white-turn small{color:var(--accent)}
+.turn-cue.rewind{border-color:rgba(169,179,193,.28);background:rgba(11,13,17,.76)}
+.turn-cue.rewind small{color:#8c96a4}
+.turn-cue.proof-mate{border-color:rgba(217,255,99,.52);box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 20px rgba(217,255,99,.12)}
+.turn-cue.proof-mate small{color:var(--accent)}
+.turn-cue.proof-complete{border-color:rgba(255,210,112,.62);box-shadow:0 8px 24px rgba(0,0,0,.24),0 0 22px rgba(255,210,112,.16)}
+.turn-cue.proof-complete small{color:#ffd986}
 
 .defense-grid.is-previewing{pointer-events:none}
 .board.variation-replay .square.hint-piece{animation:none;box-shadow:none!important}
@@ -103,40 +109,35 @@
 .defense-source-hidden{opacity:0!important}
 .replay-flyer{filter:drop-shadow(0 7px 8px rgba(0,0,0,.28))}
 .replay-key-flyer .piece{filter:drop-shadow(0 0 9px rgba(217,255,99,.22))}
-.replay-defence-flyer .piece{filter:drop-shadow(0 0 9px rgba(190,207,224,.18))}
+.replay-defence-flyer .piece,.proof-defence-flyer .piece{filter:drop-shadow(0 0 9px rgba(190,207,224,.18))}
+.replay-rewind-flyer .piece{filter:drop-shadow(0 0 7px rgba(155,168,184,.15));opacity:.88}
+.proof-mate-flyer .piece{filter:drop-shadow(0 0 10px rgba(217,255,99,.42))}
 
-.square.replay-key-source{
-  box-shadow:inset 0 0 0 2px rgba(217,255,99,.20);
-}
-.square.replay-key-target{
-  box-shadow:inset 0 0 0 3px rgba(217,255,99,.30),inset 0 0 16px rgba(217,255,99,.08);
-}
+.square.replay-key-source{box-shadow:inset 0 0 0 2px rgba(217,255,99,.20)}
+.square.replay-key-target{box-shadow:inset 0 0 0 3px rgba(217,255,99,.30),inset 0 0 16px rgba(217,255,99,.08)}
 .square.replay-key-landed{animation:keyArrival .55s ease-out}
 @keyframes keyArrival{
   0%{box-shadow:inset 0 0 0 5px rgba(217,255,99,.58),inset 0 0 24px rgba(217,255,99,.16)}
   100%{box-shadow:inset 0 0 0 1px rgba(217,255,99,0),inset 0 0 0 rgba(217,255,99,0)}
 }
-.square.replay-defence-source{
-  box-shadow:inset 0 0 0 2px rgba(188,207,226,.18);
-}
-.square.replay-defence-target,
-.square.defense-preview-target{
-  box-shadow:inset 0 0 0 3px rgba(196,214,232,.38),inset 0 0 18px rgba(196,214,232,.08);
-}
-.square.defense-landed{
-  box-shadow:inset 0 0 0 4px rgba(220,233,244,.68),inset 0 0 22px rgba(220,233,244,.16);
-}
+.square.replay-defence-source{box-shadow:inset 0 0 0 2px rgba(188,207,226,.18)}
+.square.replay-defence-target,.square.defense-preview-target{box-shadow:inset 0 0 0 3px rgba(196,214,232,.38),inset 0 0 18px rgba(196,214,232,.08)}
+.square.replay-rewind-source{box-shadow:inset 0 0 0 2px rgba(160,174,190,.18)}
+.square.replay-rewind-target{box-shadow:inset 0 0 0 2px rgba(160,174,190,.12),inset 0 0 14px rgba(160,174,190,.05)}
+.square.proof-source{box-shadow:inset 0 0 0 2px rgba(217,255,99,.18)}
+.square.proof-target{box-shadow:inset 0 0 0 3px rgba(197,216,234,.36)}
+.square.proof-mate-target{box-shadow:inset 0 0 0 4px rgba(217,255,99,.58),inset 0 0 20px rgba(217,255,99,.12)}
+.square.defense-landed{box-shadow:inset 0 0 0 4px rgba(220,233,244,.68),inset 0 0 22px rgba(220,233,244,.16)}
 .square.defense-arrival{animation:defenseArrival .9s ease-out}
 @keyframes defenseArrival{
   0%{box-shadow:inset 0 0 0 6px rgba(226,238,248,.86),inset 0 0 28px rgba(212,228,241,.26),0 0 17px rgba(200,219,236,.22)}
   100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,0),inset 0 0 0 rgba(255,255,255,0),0 0 0 rgba(255,255,255,0)}
 }
 .defense-chip.defense-preview{border-color:rgba(207,224,239,.68);color:#fff;background:rgba(196,214,232,.055)}
+.defense-chip.proof-active{border-color:rgba(217,255,99,.76)!important;color:#f1ffd0!important;background:rgba(217,255,99,.11)!important;box-shadow:0 0 0 2px rgba(217,255,99,.08),0 0 15px rgba(217,255,99,.10)}
 
 /* Captures feel decisive but stay local: no board flash. */
-.piece.capture-breaking{
-  animation:captureBreak .34s cubic-bezier(.22,.7,.2,1) forwards!important;
-}
+.piece.capture-breaking{animation:captureBreak .34s cubic-bezier(.22,.7,.2,1) forwards!important}
 .square.capture-impact::after{
   content:"";
   position:absolute;
@@ -219,10 +220,7 @@
 .variation-result.complete{border-color:rgba(255,210,112,.55);box-shadow:0 16px 44px rgba(0,0,0,.34),0 0 32px rgba(255,210,112,.15)}
 .variation-result.complete strong{color:#ffe1a0}
 
-.square.mate-impact{
-  z-index:8;
-  animation:mateKingImpact 1.05s ease-out;
-}
+.square.mate-impact{z-index:8;animation:mateKingImpact 1.05s ease-out}
 .square.mate-impact::after{
   content:"";
   position:absolute;
@@ -242,11 +240,49 @@
   100%{inset:-16%;opacity:0}
 }
 
+/* Stable viewport: iOS browser chrome may change 100dvh while the user is tapping.
+   Keep the puzzle dimensions tied to the captured viewport height instead. */
+html,body{
+  height:var(--stable-app-height,100svh)!important;
+  min-height:var(--stable-app-height,100svh)!important;
+}
+body{overflow:hidden!important}
+.shell{
+  height:var(--stable-app-height,100svh)!important;
+  min-height:var(--stable-app-height,100svh)!important;
+}
+.board-wrap{
+  max-height:calc(var(--stable-app-height,100svh) - 160px)!important;
+}
+.feedback{
+  min-height:58px!important;
+  height:58px;
+  max-height:58px;
+  overflow:hidden;
+}
+.feedback>div:last-child{min-width:0;overflow:hidden}
+.feedback strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feedback span{
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+}
+
 @media(max-width:900px){
   #phaseText:not(.is-hidden){font-size:8.5px;line-height:1.35;margin-top:3px;padding-top:4px}
   .turn-cue{top:8px;padding:6px 10px 7px}
   .variation-result{padding:10px 14px 9px}
   .variation-result strong{font-size:13px}
+  .board-wrap{
+    width:min(calc(100vw - 24px),calc(var(--stable-app-height,100svh) - 350px))!important;
+    max-height:none!important;
+  }
+  .feedback{
+    min-height:50px!important;
+    height:50px;
+    max-height:50px;
+  }
 }
 
 @media(prefers-reduced-motion:reduce){
