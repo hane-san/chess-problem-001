@@ -52,15 +52,15 @@ function showResult(progress,{final=false,mateSan=''}={}){
   boardWrap?.classList.remove('awaiting-next');
 
   if(final){
-    result.innerHTML='<strong>PROOF COMPLETE.</strong><span>どの防御にも白のMateが成立</span>';
+    result.innerHTML='<strong>PROOF COMPLETE.</strong><span>どの防御変化にも白のMateが成立</span>';
   }else if(progress.total>0 && progress.solved===progress.total){
-    result.innerHTML='<strong>ALL DEFENCES ✓</strong><span>最後に、すべての変化を順番に再生します</span>';
+    result.innerHTML='<strong>ALL VARIATIONS ✓</strong><span>最後に、防御変化を順番に再生して証明を見直します</span>';
   }else{
     awaitingNext=true;
     result.classList.add('next-ready');
     boardWrap?.classList.add('awaiting-next');
     const move = mateSan ? `${mateSan} · ` : '';
-    result.innerHTML=`<strong>CHECKMATE</strong><span>${move}この防御を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT DEFENCE</em>`;
+    result.innerHTML=`<strong>CHECKMATE</strong><span>${move}この変化を攻略 · ${progress.solved} / ${progress.total}</span><em>TAP → NEXT DEFENCE</em>`;
   }
 
   requestAnimationFrame(()=>result.classList.add('is-visible'));
@@ -80,8 +80,8 @@ async function advanceToNext(){
   awaitingNext=false;
   boardWrap?.classList.remove('awaiting-next');
   result.classList.remove('next-ready');
-  result.innerHTML='<strong>BRANCH RESET</strong><span>Key後の分岐点へ戻して、次の防御を見ます</span>';
-  await new Promise(resolve=>setTimeout(resolve,230));
+  result.innerHTML='<strong>BRANCH RESET</strong><span>Key後の分岐点へ戻して、次の防御変化を見ます</span>';
+  await new Promise(resolve=>setTimeout(resolve,260));
   result.classList.remove('is-visible');
   advancing=false;
   requestAnimationFrame(()=>next.click());
