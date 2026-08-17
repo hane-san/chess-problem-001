@@ -4,7 +4,15 @@ const HOLD_MS = 220;
 let gesture = null;
 let bypass = false;
 
+function interactionEnabled(){
+  const phase=document.body.dataset.phase;
+  return (phase==='key'||phase==='mate') &&
+    !document.body.classList.contains('key-settling') &&
+    !document.body.classList.contains('mate-settling');
+}
+
 function movableWhiteSquare(target){
+  if(!interactionEnabled()) return null;
   const square = target?.closest?.('.square');
   if(!square || !board?.contains(square)) return null;
   return square.querySelector('.piece.white') ? square : null;
@@ -75,9 +83,11 @@ board?.addEventListener('pointerdown', event=>{
   try{ board.setPointerCapture(event.pointerId); }catch{}
 
   gesture.timer = window.setTimeout(()=>{
-    if(!gesture || gesture.id !== event.pointerId) return;
+    if(!gesture || gesture.id !== event.pointerId || !interactionEnabled()) return;
     gesture.activated = true;
     board.classList.add('hold-active');
+    // The core app now selects the piece and calculates its complete legal range.
+    // This path is identical for the Key and for White's mating move.
     emitPointer('pointerdown', gesture.source, gesture.latest);
     if(navigator.vibrate) navigator.vibrate(7);
   }, HOLD_MS);
