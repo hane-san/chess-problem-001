@@ -8,15 +8,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Chess Problem 001 — Mate in Two Lab</title>
   <link rel="stylesheet" href="styles.css" />
-  <style>
-    .square.hint-piece .piece{
-      animation:hintPieceGlow 1.05s ease-in-out infinite;
-    }
-    @keyframes hintPieceGlow{
-      0%,100%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 5px rgba(217,255,99,.35));}
-      50%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 12px rgba(217,255,99,.95)) drop-shadow(0 0 20px rgba(217,255,99,.5));}
-    }
-  </style>
 </head>
 <body>
   <div class="noise"></div>
@@ -41,6 +32,14 @@
         </div>
         <div class="board-wrap">
           <div id="board" class="board" aria-label="Chess problem board"></div>
+          <svg id="refutationArrow" class="refutation-arrow" aria-hidden="true">
+            <defs>
+              <marker id="arrowHead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,4 L0,8 Z"></path>
+              </marker>
+            </defs>
+            <line id="refutationLine" x1="0" y1="0" x2="0" y2="0" marker-end="url(#arrowHead)"></line>
+          </svg>
           <div class="board-glow"></div>
         </div>
         <div class="board-foot">
@@ -78,7 +77,10 @@
 
         <section class="controls">
           <button class="btn secondary" id="resetBtn" type="button">Reset</button>
-          <button class="btn secondary" id="hintBtn" type="button">Hint</button>
+          <button class="hint-toggle is-on" id="hintToggle" type="button" role="switch" aria-checked="true" aria-label="ヒント表示">
+            <span>Hint</span>
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          </button>
           <button class="btn primary" id="revealBtn" type="button">Reveal key <span>→</span></button>
         </section>
 
