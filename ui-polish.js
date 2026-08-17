@@ -7,6 +7,8 @@ const phaseTitle = document.querySelector('#phaseTitle');
 const phaseText = document.querySelector('#phaseText');
 const phaseIndex = document.querySelector('.phase-index');
 const revealBtn = document.querySelector('#revealBtn');
+const defenseSectionTitle = document.querySelector('#defenseSection .section-title span');
+const problemIntro = document.querySelector('.problem-head p');
 
 const PIECE_CLASS = {
   '♔':'k','♚':'k',
@@ -74,8 +76,8 @@ function phaseCopy(){
   const phase=currentPhase();
   const copy={
     key:['01','① 初手（Key）を探す'],
-    defenses:['02','② 防御（Defence）を検証する'],
-    mate:['03','③ 詰み（Mate）を見つける']
+    defenses:['02','② 防御変化（Variation）を検証する'],
+    mate:['03','③ 2手目でCheckmateする']
   }[phase] || ['01','① 初手（Key）を探す'];
 
   if(phaseIndex && phaseIndex.textContent!==copy[0]) phaseIndex.textContent=copy[0];
@@ -84,7 +86,7 @@ function phaseCopy(){
   if(revealBtn){
     if(phase==='defenses'){
       revealBtn.disabled=true;
-      revealBtn.innerHTML='防御を選んで検証 <span>↓</span>';
+      revealBtn.innerHTML='防御変化を選ぶ <span>↓</span>';
     }else{
       revealBtn.disabled=false;
       revealBtn.innerHTML='答えを見る <span>→</span>';
@@ -92,6 +94,11 @@ function phaseCopy(){
   }
 
   renderThinkingHint();
+}
+
+function staticCopy(){
+  if(defenseSectionTitle) defenseSectionTitle.textContent='黒の防御変化 · VARIATIONS';
+  if(problemIntro) problemIntro.textContent='Keyを決め、黒の防御変化を1本ずつ検証し、どの変化にも白の2手目のCheckmateがあることを示します。同じ応手になる防御は代表変化にまとめています。';
 }
 
 function localizeFeedback(){
@@ -105,30 +112,31 @@ function localizeFeedback(){
 
   if(nextTitle==='Quietly inspect the position.') nextTitle='まず、白のKeyを探します。';
   else if(nextTitle==='Not the key.') nextTitle='その手はKeyではありません';
-  else if(nextTitle==='Not mate.') nextTitle='まだMateではありません';
-  else if(nextTitle==='Choose a defence.') nextTitle='黒の防御を選んで検証します';
+  else if(nextTitle==='Not mate.') nextTitle='まだCheckmateではありません';
+  else if(nextTitle==='Choose a defence.') nextTitle='黒の防御変化を選んで検証します';
   else if(nextTitle==='Proof complete.') nextTitle='すべての変化を検証しました！';
   else {
     const keyMatch=nextTitle.match(/^(.+) — key found\.$/);
     const mateMatch=nextTitle.match(/^(.+) — mate\.$/);
     const revealMatch=nextTitle.match(/^(.+) — revealed\.$/);
     if(keyMatch) nextTitle=`${keyMatch[1]}：Keyです`;
-    else if(mateMatch) nextTitle=`${mateMatch[1]}：Mateです`;
+    else if(mateMatch) nextTitle=`${mateMatch[1]}：Checkmate`;
     else if(revealMatch) nextTitle=`${revealMatch[1]}：答え`;
   }
 
   if(nextText==='まずは黒王の周囲を見る。') nextText='盤面の仕組みを観察して、Keyを探します。';
   else if(nextText==='黒にこの手を壊す応手があります。') nextText='黒に、この初手を成立させない防御があります。';
-  else if(nextText==='この黒手のあと、白は次の1手で詰ませられません。') nextText='この防御のあと、白は2手目でMateできません。だからこの初手はKeyではありません。';
-  else if(nextText==='黒がこう応じられるので、まだmateではありません。') nextText='黒にこの応手が残るため、まだMateではありません。';
-  else if(nextText==='この黒の防御に対して、白の2手目で詰ませる。') nextText='この防御に対する白のMateを探します。';
-  else if(nextText==='すべての代表防御にmateを確認しました。keyを「当てた」のではなく、構造を証明できています。') nextText='黒の各防御変化に対して白の2手目のMateを確認できました。これで#2の解答が完成です。';
+  else if(nextText==='この黒手のあと、白は次の1手で詰ませられません。') nextText='この防御のあと、白は2手目でCheckmateできません。だからこの初手はKeyではありません。';
+  else if(nextText==='黒がこう応じられるので、まだmateではありません。') nextText='黒にこの応手が残るため、まだCheckmateではありません。';
+  else if(nextText==='この黒の防御に対して、白の2手目で詰ませる。') nextText='この防御変化に対する白のCheckmateを探します。';
+  else if(nextText==='すべての代表防御にmateを確認しました。keyを「当てた」のではなく、構造を証明できています。') nextText='代表変化として整理した黒の防御群すべてに、白の2手目のCheckmateを確認できました。これで#2の解答が完成です。';
 
   if(title.textContent!==nextTitle) title.textContent=nextTitle;
   if(text.textContent!==nextText) text.textContent=nextText;
 }
 
 normalizePieces();
+staticCopy();
 phaseCopy();
 localizeFeedback();
 
