@@ -66,26 +66,42 @@ function flashBlackKing(){
   setTimeout(()=>king.classList.remove('mate-impact'),1150);
 }
 
-function commitPointer(target, sourceEvent){
-  bypass = true;
+function dispatchCorePointer(type,target,pointerId,pointerType,clientX,clientY){
+  const event=new PointerEvent(type,{
+    bubbles:true,
+    cancelable:true,
+    pointerId,
+    pointerType:pointerType || 'touch',
+    isPrimary:true,
+    button:0,
+    buttons:type==='pointerup'?0:1,
+    clientX,
+    clientY,
+    pressure:type==='pointerup'?0:.5
+  });
+  target.dispatchEvent(event);
+}
+
+function commitMove(from,to,sourceEvent){
+  const source=squareEl(from);
+  const target=squareEl(to);
+  if(!source||!target) return;
+  const a=source.getBoundingClientRect();
+  const b=target.getBoundingClientRect();
+  const pointerId=sourceEvent.pointerId || 1;
+  const pointerType=sourceEvent.pointerType || 'touch';
+
+  bypass=true;
+  document.body.classList.add('programmatic-commit');
   try{
-    const event = new PointerEvent('pointerup',{
-      bubbles:true,
-      cancelable:true,
-      pointerId:sourceEvent.pointerId,
-      pointerType:sourceEvent.pointerType || 'touch',
-      isPrimary:sourceEvent.isPrimary ?? true,
-      button:0,
-      buttons:0,
-      clientX:sourceEvent.clientX,
-      clientY:sourceEvent.clientY,
-      screenX:sourceEvent.screenX || 0,
-      screenY:sourceEvent.screenY || 0,
-      pressure:0
-    });
-    target.dispatchEvent(event);
+    // Recreate a complete gesture after the visual animation. This does not depend on
+    // the original pointer capture still being alive, so the core state stays reliable.
+    dispatchCorePointer('pointerdown',source,pointerId,pointerType,a.left+a.width/2,a.top+a.height/2);
+    dispatchCorePointer('pointermove',target,pointerId,pointerType,b.left+b.width/2,b.top+b.height/2);
+    dispatchCorePointer('pointerup',target,pointerId,pointerType,b.left+b.width/2,b.top+b.height/2);
   }finally{
-    bypass = false;
+    document.body.classList.remove('programmatic-commit');
+    bypass=false;
   }
 }
 
@@ -129,21 +145,17 @@ async function animateWhiteMove({from,to,duration,kind,capture=true}){
 
   await wait(duration);
   flyer.remove();
-  // Keep the source hidden until the core app commits and rerenders the true board.
-  // This avoids a one-frame snap back to the origin square.
   toSquare.classList.remove('capture-impact',`white-${kind}-target`);
 }
 
-async function animateCorrectKey({from,to,target,event}){
+async function animateCorrectKey({from,to,event}){
   animating = true;
   board?.classList.add('white-success-travel','white-key-travel');
   document.body.classList.add('key-settling');
 
   showCue('WHITE KEY',problem.key.san,'key-turn');
   await animateWhiteMove({from,to,duration:KEY_TRAVEL_MS,kind:'key',capture:false});
-
-  // Commit the already-validated key through the core app.
-  commitPointer(target,event);
+  commitMove(from,to,event);
   await wait(reduceMotion?.matches ? 110 : KEY_BREATH_MS);
 
   showCue('KEY FOUND',problem.key.san,'key-found');
@@ -159,18 +171,15 @@ async function animateCorrectKey({from,to,target,event}){
   animating = false;
 }
 
-async function animateCorrectMate({from,to,defense,target,event}){
+async function animateCorrectMate({from,to,defense,event}){
   animating = true;
   board?.classList.add('white-success-travel','white-mate-travel');
   document.body.classList.add('mate-settling');
 
   showCue('WHITE MOVE',defense.mateSan,'proof-mate');
   await animateWhiteMove({from,to,duration:MATE_TRAVEL_MS,kind:'mate',capture:true});
+  commitMove(from,to,event);
 
-  // Commit the already-validated mating move and render the true final position.
-  commitPointer(target,event);
-
-  // Hold the completed board for a beat before announcing the result.
   await wait(reduceMotion?.matches ? 120 : MATE_BREATH_MS);
   flashBlackKing();
   showCue('CHECKMATE',defense.mateSan,'checkmate');
@@ -186,7 +195,6 @@ async function animateCorrectMate({from,to,defense,target,event}){
 }
 
 board?.addEventListener('pointerup',event=>{
-  // interaction-polish emits the synthetic pointer event after a long-press drag.
   if(bypass || animating || event.isTrusted) return;
 
   const phase=document.body.dataset.phase;
@@ -204,7 +212,7 @@ board?.addEventListener('pointerup',event=>{
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    animateCorrectKey({from,to,target,event});
+    animateCorrectKey({from,to,event});
     return;
   }
 
@@ -214,6 +222,6 @@ board?.addEventListener('pointerup',event=>{
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    animateCorrectMate({from,to,defense,target,event});
+    animateCorrectMate({from,to,defense,event});
   }
 },true);
