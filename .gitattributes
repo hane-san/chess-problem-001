@@ -1,0 +1,2 @@
+# Preserve the upstream source verbatim; its generated parser uses mixed indentation.
+vendor/chess.js -whitespace

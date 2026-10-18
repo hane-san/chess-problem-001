@@ -1,48 +1,54 @@
-# Chess Problem 001 — Mate in Two Lab
+# MATE / TWO — Chess Problem Lab
 
-A design-first prototype for solving orthodox **#2 (mate in two)** chess problems in the browser.
+白の初手（Key）を探し、黒のすべての合法応手に対する詰みを盤上で検証する、静的なチェス・プロブレムアプリです。現在は D. J. Shire 作の #2 問題を収録しています。
 
-## What this prototype is testing
+## ローカルで起動
 
-- A board-first, mobile-friendly problem-solving UI
-- `key → defence → mate` as the primary interaction model
-- Explicit handling of **try / refutation**, rather than a generic “wrong” state
-- FEN-first problem storage so thousands of positions can be added without image assets
-- A data/UI split: problems live in `data/problems.js`, while the interface stays unchanged
-
-## Run locally
-
-Because the app uses ES modules, serve the folder over HTTP rather than opening `index.html` directly.
-
-```bash
-python3 -m http.server 8000
+```sh
+npm ci
+npm start
 ```
 
-Then open `http://localhost:8000`.
+http://localhost:8000 を開きます。ビルドは不要です。GitHub Pages にもそのまま配置できます。実行時に外部CDNや外部フォントには接続しません。
 
-## Data shape
+## 操作
 
-Each problem stores:
+- 白駒と移動先を順番にタップ、または駒をスライドして着手。
+- 初手を見つけたら、印の付いた黒駒を選んで応手を表示。
+- 半透明の駒をタップし、白の次の一手で詰ませる。
+- 「応手へ」で分岐点へ。「応手一覧」から直接選択も可能。
+- 「次の応手へ」は未検証の応手を優先。「全手順を再生」は全13手の検証後に使用可能。
+- ヒントは考え方 → 注目する駒 → 閉じるの3段階。
+- 矢印キーで盤上を移動し、Enter/Spaceで駒・移動先を選択。Escapeで選択解除。
 
-- FEN
-- composer / source / year
-- key
-- known tries and refutations
-- representative black defences
-- mating replies and short commentary
+iPhoneのセーフエリア、縦横両画面、ページ拡大に対応します。小さい画面ではページ全体をスクロールでき、操作欄や説明が切れません。SVGの駒は端末にかかわらず同じ形で表示されます。
 
-The first sample is D. J. Shire, *The Problemist Supplement* (1997), reproduced as a learning prototype from the BCPS beginners' page.
+## 保存と安定性
 
-## Prototype limitations
+進み具合・盤面の向き・効果音設定は、このブラウザの `localStorage` に保存します。再読み込み時は合法なチェックポイントから再開します。保存が使えない場合も、その画面で解き続けられます。「はじめから」で問題の進み具合を消去します。効果音は初期状態でオフです。
 
-Version 0.1 validates the authored #2 solution tree rather than implementing a full chess legality engine. This is deliberate: the goal is to iterate quickly on the problem-solving UX first. A later version can add `chess.js` for full legal-move validation without changing the data-first architecture.
+着手・反証・巻き戻し・全手順再生は一つの操作キューで管理します。リセット時には保留中の操作を無効にし、古い処理が盤面や説明を上書きするのを防ぎます。隠れた結果画面はフォーカスや操作を受け取りません。
 
-## Next likely iterations
+## データと構成
 
-1. Full orthodox legality validation (`chess.js`)
-2. Bulk JSON ingestion and schema validation
-3. Random / sequential problem navigation
-4. Theme, composer, year and difficulty filters
-5. Attempt history and local progress
-6. “Why this try fails” / “show one refutation” teaching modes
-7. GitHub Pages deployment for Notion embedding
+- `index.html` / `styles.css`: 画面とレスポンシブデザイン
+- `lab-v2.js`: 状態、入力、描画、保存、アニメーション
+- `data/problems.js`: FEN、初手、代表変化、解説、出典
+- `vendor/chess.js`: 固定バージョン chess.js 1.4.0（ライセンス同梱）
+- `assets/icon.svg`: アプリアイコン
+
+合法手と詰み判定は chess.js を使用します。黒の応手はすべて合法手から生成し、各応手の実際の詰みを検証します。現在は1問の #2 専用で、問題選択や詰将棋のルールには対応していません。
+
+chess.js の更新時は `npm run vendor:chess` で同梱ファイルとライセンスを同期してください。`npm run check:vendor` がロック済み依存との差異を検出します。
+
+## 検証
+
+```sh
+npm ci
+npx playwright install --with-deps chromium webkit
+npm test
+```
+
+データ検証では初手の唯一性、全13応手への詰み、代表変化と紛れの反証を確認します。ブラウザテストはiPhone相当のWebKit・Chromiumとデスクトップで、全応手、誤答、駒の捕獲と復元、再生のスキップ、途中再開、操作中のリセット、保存失敗、キーボード操作を確認します。320〜430pxの画面幅・横画面・文字拡大で、表示のはみ出しと操作の到達性も確認します。WebKitは自動テスト用のSafari系エンジンであり、iPhone実機の確認を代替するものではありません。
+
+既存の単体スモークテストは `npm run test:smoke` で実行できます。Pagesのワークフローもロック済み依存と両ブラウザを使用し、検証後に公開します。
