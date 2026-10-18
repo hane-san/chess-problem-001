@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>MATE / TWO — Chess Problem Lab</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=20261018-quality1">
+  <link rel="stylesheet" href="styles.css?v=20261018-shadow1">
 </head>
 <body>
   <a class="skip-link" href="#board">盤面へ移動</a>
@@ -39,13 +39,14 @@
           <button id="resultOverlay" class="result-overlay" type="button" hidden>
             <strong id="resultTitle">CHECKMATE</strong>
             <span id="resultDetail"></span>
-            <em id="resultAction">TAP · VARIATIONS</em>
+            <em id="resultAction">タップして戻る →</em>
           </button>
         </div>
         <div class="board-foot">
           <span>D. J. Shire <span class="meta-dot">·</span> 1997</span>
           <span>WAITING <span class="meta-dot">/</span> #2</span>
         </div>
+        <div id="boardLegend" class="board-legend" hidden></div>
       </div>
 
       <aside class="panel">
@@ -73,8 +74,18 @@
 
         <p id="helpText">白駒をタップして、移動先をタップ。スライドでも動かせます。</p>
 
+        <section id="explanationPanel" class="explanation-panel" aria-label="失敗した手の盤上解説" hidden>
+          <div class="explanation-tabs" role="group" aria-label="解説の表示">
+            <button id="responseViewBtn" type="button" aria-pressed="false">① 黒の応手を再生</button>
+            <button id="coverageViewBtn" type="button" aria-pressed="true">② 王の逃げ道</button>
+            <button id="blackControlBtn" type="button" aria-pressed="false">③ 黒の利き</button>
+          </div>
+          <p id="explanationDetail" aria-live="polite"></p>
+          <button id="retryBtn" type="button">↶ 元の局面でもう一度</button>
+        </section>
+
         <div class="progress-head">
-          <span>黒の応手 <span id="branchCount"></span></span>
+          <span>シャドー <span id="branchCount"></span></span>
           <small id="solvedCount">0 / 13</small>
         </div>
         <div class="progress-track" id="progressTrack" role="progressbar" aria-label="検証した黒の応手" aria-valuemin="0" aria-valuemax="13" aria-valuenow="0"><span id="progressBar"></span></div>
@@ -83,11 +94,12 @@
 
         <div class="lab-controls">
           <button id="backBtn" type="button" hidden>↶ 応手へ</button>
-          <button id="hintToggle" type="button" aria-pressed="false"><span aria-hidden="true">✧</span> ヒント</button>
+          <button id="hintToggle" type="button" aria-pressed="true">✧ 駒ヒント ON</button>
           <button id="revealBtn" type="button">初手を見る <span aria-hidden="true">↗</span></button>
         </div>
         <div class="secondary-controls">
           <button id="showBranchesBtn" type="button" aria-controls="branchTray" aria-expanded="false" hidden>応手一覧</button>
+          <button id="strategyBtn" type="button">考え方</button>
           <span id="saveStatus" class="save-status" role="status"></span>
           <button id="resetBtn" type="button">はじめから</button>
         </div>
@@ -102,7 +114,7 @@
   <div id="startupError" class="startup-error" role="alert" hidden><strong>盤面を読み込めませんでした</strong><p>ページを再読み込みしてください。進み具合はこの端末に保存されています。</p><button type="button" onclick="location.reload()">再読み込み</button></div>
   <noscript><p class="noscript">このアプリを使うにはJavaScriptを有効にしてください。</p></noscript>
   <script type="module">
-    import('./lab-v2.js?v=20261018-quality1').catch(() => {
+    import('./lab-v2.js?v=20261018-shadow1').catch(() => {
       document.getElementById('startupError').hidden = false;
     });
   </script>
