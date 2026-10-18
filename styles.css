@@ -250,8 +250,14 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
 .mate-impact::after { content: ""; position: absolute; inset: 8%; border: 3px solid #e5f6a9; border-radius: 50%; z-index: 20; animation: mateRing .65s ease-out both; pointer-events: none; }
 @keyframes mateRing { from { transform: scale(.65); opacity: 1; } to { transform: scale(1.45); opacity: 0; } }
 .victory-attacker { filter: drop-shadow(0 0 7px #e2f4a9); }
-.shadow-defeated { pointer-events: none; }
-.shadow-defeated::before { border-color: #e5f6a9; }
+.victory-attacker { z-index: 35; }
+.shadow-defeated { pointer-events: none; z-index: 33; }
+.batch-shadow { border: 1px dashed #e5f6a9a6; border-radius: 6px; background: #1f3e2d33; }
+.batch-shadow > .piece { opacity: .65; }
+.attempt-defeated { z-index: 35; border: 1px dashed #f4a38b; border-radius: 6px; background: #542e2445; }
+.attempt-defeated .piece { filter: drop-shadow(0 0 5px #df8d72); }
+.shatter-fragment { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; will-change: transform, opacity; }
+.shatter-failure .shatter-fragment .piece { --piece-stroke: #a34e3a; }
 .branch-origin-done::after { display: none; }
 .branch-origin-done .branch-origin-count { color: #d4e9a3; opacity: .65; }
 .board-legend { color: #ccd6c4; font-size: 11px; line-height: 1.7; margin-top: 10px; padding: 8px 10px; border-left: 2px solid #a8b57e; background: #1c2b21; border-radius: 0 6px 6px 0; }
@@ -260,6 +266,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
 .analysis-arrow.white-control { stroke: #e5f7a7; opacity: .85; }
 .analysis-arrow.black-control { stroke: #f4a38b; opacity: .8; }
 .analysis-arrow.response { stroke-width: 4; stroke-dasharray: 7 3; opacity: 1; }
+.analysis-arrow.survival { stroke-width: 4; opacity: 1; }
 .analysis-arrow.check { stroke-width: 3.2; opacity: 1; }
 .square.analysis-controlled { box-shadow: inset 0 0 0 2px #d9f69a99; }
 .square.analysis-escape { box-shadow: inset 0 0 0 3px #c1edf9; }
@@ -271,14 +278,17 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
 .square.analysis-source > .piece { filter: drop-shadow(0 0 4px #f4a38b99); }
 .square.analysis-move-from { box-shadow: inset 0 0 0 3px #e99b7e; }
 .square.analysis-move-to { box-shadow: inset 0 0 0 3px #f4a38b; }
+.square.analysis-safe { box-shadow: inset 0 0 0 3px #e5f7a7; }
 .analysis-cell-mark { position: absolute; top: 2px; right: 2px; min-width: 14px; z-index: 19; padding: 1px 3px; border-radius: 3px; background: #234539e6; color: #eef9dd; font: 600 9px/1.4 sans-serif; pointer-events: none; }
 .analysis-escape .analysis-cell-mark { color: #102a30; background: #c1edf9; }
 .explanation-panel { padding: 12px; margin-bottom: 18px; border: 1px solid #8b62516b; background: #211f19; border-radius: 10px; }
-.explanation-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.explanation-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
 .explanation-tabs button { min-height: 44px; min-width: 0; padding: 7px 4px; background: #25291f; border: 1px solid #62614c; border-radius: 7px; font-size: 11px; line-height: 1.5; }
 .explanation-tabs button[aria-pressed="true"] { color: #f6d1b0; border-color: #e8ac88; background: #3d3024; }
 #explanationDetail { margin: 10px 1px; color: #c8c7b4; font-size: 12px; line-height: 1.7; }
-#retryBtn { width: 100%; min-height: 46px; border: 1px solid #dfc190; background: #dfc190; color: #2b2419; border-radius: 8px; font-size: 12px; font-weight: 600; }
+.explanation-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.explanation-actions button { flex: 1; min-width: 115px; min-height: 46px; border: 1px solid #dfc190; background: #dfc190; color: #2b2419; border-radius: 8px; font-size: 12px; font-weight: 600; padding: 7px; }
+#pauseExplanationBtn { background: transparent; color: #dfc190; }
 .secondary-controls { flex-wrap: wrap; column-gap: 12px; }
 .secondary-controls .save-status { flex: 1; min-width: 85px; }
 @media (max-width: 430px) { .lab-controls button { padding-left: 7px; padding-right: 7px; } .lab-controls #revealBtn { gap: 5px; } }

@@ -20,6 +20,10 @@ async function key(page,app){
   await app.tap(app.sq('h2'));await app.phase('explore');
 }
 async function open(page,app,id){
+  if((await app.state()).solvedIds.includes(id)){
+    if(!await page.locator('#branchTray').evaluate(el=>el.classList.contains('open')))await app.tap(page.locator('#showBranchesBtn'));
+    await app.tap(page.locator(`.branch-chip[data-branch="${id}"]`));await app.phase('mate');return;
+  }
   if((await app.state()).focusFrom!==id.slice(0,2))await app.tap(app.sq(id.slice(0,2)));
   await app.tap(page.locator(`.shadow-choice[data-branch="${id}"]`));await app.phase('mate');
 }
@@ -32,6 +36,7 @@ async function wrongMate(page,app){
   await key(page,app);await open(page,app,'d3d4');
   const before=(await app.state()).viewFen;
   await app.tap(app.sq('b5'));await app.tap(app.sq('b6'));await app.phase('explain');
+  await app.tap(page.locator('#pauseExplanationBtn'));
   return before;
 }
 async function seedCompleted(page,app){
@@ -60,12 +65,15 @@ test('shadow choice has no arrows; selected black piece materializes with only f
   await expect(app.sq('c2')).not.toHaveClass(/hint-origin/);
 });
 
-test('all 13 defences auto-rewind, clear only their shadow, restore captures and leave a clean completed board',async({page,app})=>{
+test('all 13 defences auto-rewind, clear exactly matching shadows, restore captures and leave a clean completed board',async({page,app})=>{
   const board=await page.locator('#board').boundingBox();await key(page,app);
   const branches=await page.evaluate(()=>window.__mateTwoDebug.branches());expect(branches).toHaveLength(13);
-  for(let i=0;i<branches.length;i++){
-    const b=branches[i];await solve(page,app,b,i===branches.length-1);
-    await expect(page.locator('#progressTrack')).toHaveAttribute('aria-valuenow',String(i+1));
+  const cleared=new Set();
+  for(const b of branches){
+    branches.filter(other=>other.mates.includes(b.mateFrom+b.mateTo)).forEach(other=>cleared.add(other.id));
+    await solve(page,app,b,cleared.size===13);
+    await expect(page.locator('#progressTrack')).toHaveAttribute('aria-valuenow',String(cleared.size));
+    expect(new Set((await app.state()).solvedIds)).toEqual(cleared);
     await expect(page.locator(`.shadow-choice[data-branch="${b.id}"]`)).toHaveCount(0);
     await expect(app.sq('f3').locator(':scope > .piece.white')).toHaveCount(1);
     await expect(app.sq('d3').locator(':scope > .piece.black')).toHaveCount(1);
@@ -81,35 +89,39 @@ test('all 13 defences auto-rewind, clear only their shadow, restore captures and
   await app.tap(page.locator('#revealBtn'));await app.phase('complete');await expect(page.locator('#solvedCount')).toHaveText('13 / 13');
 });
 
-test('capture and non-capture wins remove just one shadow each and keep the chosen opponent focused',async({page,app})=>{
+test('one exact knight move clears two shadows; a different queen move clears only its matching shadow',async({page,app})=>{
   await key(page,app);const branches=await page.evaluate(()=>window.__mateTwoDebug.branches());
-  await solve(page,app,branches.find(b=>b.id==='d3d2'));await expect(page.locator('.shadow-choice')).toHaveCount(8);
-  await solve(page,app,branches.find(b=>b.id==='d3f3'));await expect(page.locator('.shadow-choice')).toHaveCount(7);
+  await solve(page,app,branches.find(b=>b.id==='d3d2'));await expect(page.locator('.shadow-choice')).toHaveCount(7);
+  expect((await app.state()).solvedIds.sort()).toEqual(['d3d2','d3e3']);
+  await solve(page,app,branches.find(b=>b.id==='d3f3'));await expect(page.locator('.shadow-choice')).toHaveCount(6);
   await expect(page.locator('.shadow-choice[data-branch="d3d2"],.shadow-choice[data-branch="d3f3"]')).toHaveCount(0);
   await expect(app.sq('f3').locator(':scope > .piece.white')).toHaveCount(1);
 });
 
-test('wrong mate pauses on a real black escape with coverage arrows, replay, black control filtering and exact retry',async({page,app})=>{
+test('wrong mate shows a black check and a safe white escape, with pausable diagrams and exact retry',async({page,app})=>{
   const before=await wrongMate(page,app);
-  expect((await app.state()).explanation).toMatchObject({mode:'coverage',kind:'not-mate',reply:'Kc5',from:'c4',to:'c5'});
-  await expect(page.locator('#feedback strong')).toHaveText('黒王に逃げ道が残っています');
+  expect((await app.state()).explanation).toMatchObject({mode:'survival',kind:'not-mate',reply:'Rh4+',from:'d4',to:'h4',survival:'Kg3',autoRewind:false});
+  await expect(page.locator('#explanationDetail')).toContainText('黒 Rh4+ → 白 Kg3');
+  await expect(page.locator('.analysis-arrow.survival')).toHaveAttribute('data-from','h2');
+  await expect(page.locator('.analysis-arrow.survival')).toHaveAttribute('data-to','g3');
+  await expect(app.sq('g3').locator(':scope > .piece.white')).toBeVisible();
+  await app.tap(page.locator('#coverageViewBtn'));
   await expect(page.locator('.analysis-escape')).not.toHaveCount(0);
-  await expect(page.locator('.analysis-arrow.white-control')).not.toHaveCount(0);
   await expect(page.locator('#explanationPanel')).toBeVisible();
   await expect(page.locator('#solvedCount')).toHaveText('0 / 13');
-  await page.waitForTimeout(250);await app.phase('explain'); // The lesson waits for the player.
+  await page.waitForTimeout(4000);await app.phase('explain'); // Pausing cancels automatic rewind.
   await app.tap(page.locator('#responseViewBtn'));await app.phase('explain');
-  await expect(page.locator('.analysis-arrow.response')).toHaveAttribute('data-from','c4');
-  await expect(page.locator('.analysis-arrow.response')).toHaveAttribute('data-to','c5');
+  await expect(page.locator('.analysis-arrow.response')).toHaveAttribute('data-from','d4');
+  await expect(page.locator('.analysis-arrow.response')).toHaveAttribute('data-to','h4');
   await app.tap(page.locator('#blackControlBtn'));
   await expect(page.locator('.analysis-black')).not.toHaveCount(0);
   await expect(page.locator('.analysis-arrow.black-control')).not.toHaveCount(0);
-  await app.tap(app.sq('d4'));
-  const origins=await page.locator('.analysis-arrow').evaluateAll(nodes=>nodes.map(n=>n.dataset.from));expect(new Set(origins)).toEqual(new Set(['d4']));
+  await app.tap(app.sq('h4'));
+  const origins=await page.locator('.analysis-arrow').evaluateAll(nodes=>nodes.map(n=>n.dataset.from));expect(new Set(origins)).toEqual(new Set(['h4']));
   const path=await page.locator('.analysis-arrow').first().getAttribute('d');
   await app.tap(page.locator('#flipBtn'));await expect(page.locator('.analysis-arrow').first()).not.toHaveAttribute('d',path);
   await app.tap(page.locator('#flipBtn'));
-  await app.tap(app.sq('d4'));await app.tap(page.locator('#coverageViewBtn'));
+  await app.tap(app.sq('h4'));await app.tap(page.locator('#survivalViewBtn'));await app.phase('explain');
   await app.tap(page.locator('#retryBtn'));await app.phase('mate');
   expect((await app.state()).viewFen).toBe(before);await expect(page.locator('.analysis-arrow')).toHaveCount(0);
   await expect(page.locator('#boardLegend')).toBeHidden();await expect(page.locator('.ghost-residue')).toHaveCount(8);
@@ -118,6 +130,7 @@ test('wrong mate pauses on a real black escape with coverage arrows, replay, bla
 
 test('wrong key uses its true refutation and reload resumes a clean legal checkpoint',async({page,app})=>{
   const initial=(await app.state()).viewFen;await app.tap(app.sq('g2'));await app.tap(app.sq('g3'));await app.phase('explain');
+  await app.tap(page.locator('#pauseExplanationBtn'));
   expect((await app.state()).explanation).toMatchObject({kind:'key-refuted',reply:'Re3',from:'d3',to:'e3',returnPhase:'key'});
   await expect(page.locator('#feedback strong')).toHaveText('この初手には黒の反証があります');
   await app.tap(page.locator('#retryBtn'));await app.phase('key');expect((await app.state()).viewFen).toBe(initial);
@@ -191,12 +204,64 @@ test('full-motion victory animates the attacker and shadow defeat, then leaves n
   await key(page,app);await open(page,app,'d3d2');
   await page.emulateMedia({reducedMotion:'no-preference'});
   await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
-  await expect(page.locator('.shadow-defeated')).toBeVisible();
+  await expect(page.locator('.shadow-defeated')).toHaveCount(2);
   await expect(page.locator('.victory-attacker')).toBeVisible();
   await app.phase('explore');await expect(page.locator('.move-sprite,.shadow-defeated')).toHaveCount(0);
-  await expect(page.locator('.shadow-choice')).toHaveCount(8);
+  await expect(page.locator('.shadow-choice')).toHaveCount(7);
   await expect(page.locator('.shadow-choice').first()).toBeEnabled();
   await expect(app.sq('f3').locator(':scope > .piece.white')).toBeVisible();
+});
+
+test('five matching shadows shatter together before a beat and rewind; progress survives reload during the beat',async({page,app})=>{
+  await key(page,app);await open(page,app,'d3d5');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(app.sq('c2'));await app.tap(app.sq('c3'));
+  await expect(page.locator('.shadow-defeated')).toHaveCount(5);
+  const ids=await page.locator('.shadow-defeated').evaluateAll(nodes=>nodes.map(n=>n.dataset.branch).sort());
+  expect(ids).toEqual(['d3d1','d3d5','d3d6','d3d7','d3d8']);
+  await expect(page.locator('.shatter-fragment')).toHaveCount(30);
+  const beat=await page.waitForFunction(()=>{
+    const s=window.__mateTwoDebug.state();if(s.playbackStage!=='hold')return false;
+    return {phase:s.phase,solved:s.solved,queen:getComputedStyle(document.querySelector('[data-square="c3"] > .piece.white')).visibility,rook:getComputedStyle(document.querySelector('[data-square="d5"] > .piece.black')).visibility};
+  });
+  expect(await beat.jsonValue()).toEqual({phase:'victory',solved:5,queen:'visible',rook:'hidden'});
+  await page.reload();await app.phase('explore');
+  await expect(page.locator('#solvedCount')).toHaveText('5 / 13');
+  await expect(app.sq('c2').locator(':scope > .piece.white')).toBeVisible();
+  await expect(page.locator('.shadow-choice')).toHaveCount(4);
+  await expect(page.locator('.move-sprite,.shatter-fragment')).toHaveCount(0);
+});
+
+test('failure automatically breaks the unsuccessful move, pauses, then rewinds every demonstrated move exactly',async({page,app})=>{
+  await key(page,app);await open(page,app,'d3d4');const before=(await app.state()).viewFen;
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(app.sq('b5'));await app.tap(app.sq('b6'));await app.phase('explain');
+  expect((await app.state()).explanation).toMatchObject({survival:'Kg3',autoRewind:true});
+  await expect(page.locator('.attempt-defeated .shatter-fragment')).toHaveCount(6);
+  const beat=await page.waitForFunction(()=>{
+    const s=window.__mateTwoDebug.state();if(s.playbackStage!=='hold')return false;
+    return {phase:s.phase,rook:getComputedStyle(document.querySelector('[data-square="b6"] > .piece.white')).visibility};
+  });
+  expect(await beat.jsonValue()).toEqual({phase:'explain',rook:'hidden'});
+  await app.phase('mate');expect((await app.state()).viewFen).toBe(before);
+  await expect(page.locator('.move-sprite,.shatter-fragment,.analysis-arrow')).toHaveCount(0);
+  await expect(page.locator('#solvedCount')).toHaveText('0 / 13');
+});
+
+test('reset cancels both a scheduled failure rewind and a fracture already in progress',async({page,app})=>{
+  const initial=(await app.state()).viewFen;
+  await key(page,app);await open(page,app,'d3d4');
+  await app.tap(app.sq('b5'));await app.tap(app.sq('b6'));await app.phase('explain');
+  expect((await app.state()).explanation.autoRewind).toBe(true);
+  await app.tap(page.locator('#resetBtn'));await page.waitForTimeout(4100);await app.phase('key');
+  expect((await app.state()).viewFen).toBe(initial);
+  await wrongMate(page,app);await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(page.locator('#retryBtn'));
+  await expect(page.locator('.attempt-defeated .shatter-fragment')).toHaveCount(6);
+  await app.tap(page.locator('#resetBtn'));await page.waitForTimeout(1700);await app.phase('key');
+  expect((await app.state()).viewFen).toBe(initial);
+  await expect(page.locator('.move-sprite,.shatter-fragment,.analysis-arrow')).toHaveCount(0);
+  await expect(page.locator('#solvedCount')).toHaveText('0 / 13');
 });
 
 test('iPhone widths, landscape and enlarged text keep board square and controls reachable, including the visual lesson',async({page,app})=>{
