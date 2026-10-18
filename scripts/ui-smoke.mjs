@@ -29,7 +29,21 @@ try{
   await requireState(page,'explore');
   await assert(await page.locator('.square[data-square="h2"] .piece.white').count()===1,'Key King vanished');
   await assert(await page.locator('.square[data-square="g2"] .piece').count()===0,'Key did not leave g2');
-  await assert(await page.locator('.ghost-target').count()===13,'13 ghost replies not displayed');
+  await assert(await page.locator('.ghost-target').count()===0,'Ghost replies should not appear before selecting a Black piece');
+  const groups=await page.evaluate(()=>window.__mateTwoDebug.branches().reduce((acc,b)=>{
+    const from=b.id.slice(0,2);acc[from]=(acc[from]||0)+1;return acc;
+  },{}));
+  await assert(await page.locator('.branch-origin').count()===Object.keys(groups).length,
+    'Movable Black source markers not displayed');
+  // The same Black piece toggles open/closed; switching to another piece shows only its routes.
+  await tapSquare(page,'d3');
+  await assert(await page.locator('.ghost-target').count()===groups.d3,'Selected rook did not reveal all and only its moves');
+  await tapSquare(page,'d3');
+  await assert(await page.locator('.ghost-target').count()===0,'Tapping selected Black piece should close its routes');
+  await tapSquare(page,'b2');
+  await assert(await page.locator('.ghost-target').count()===groups.b2,'Knight group did not open');
+  await tapSquare(page,'d3');
+  await assert(await page.locator('.ghost-target').count()===groups.d3,'Switching back to rook did not restore its options');
 
   // Defence and mate: click the ghost, play the white knight mate, then rewind.
   await page.locator('.ghost-target[data-branch="d3d2"]').click({force:true});
@@ -44,7 +58,8 @@ try{
   await requireState(page,'explore');
   await assert(await page.locator('.square[data-square="f3"] .piece.white').count()===1,'Knight was not restored on branch rewind');
   await assert(await page.locator('.square[data-square="d3"] .piece.black').count()===1,'Rook was not restored on branch rewind');
-  await assert(await page.locator('.ghost-target').count()===13,'Ghosts did not return after rewind');
+  await assert(await page.locator('.ghost-target').count()===groups.d3,'Rook options should remain open after the first mate');
+  await assert(await page.locator('.ghost-target.solved[data-branch="d3d2"]').count()===1,'Solved rook ghost must stay marked');
 
   // Capture branch: black rook captures White knight; Queen mates on e4.
   await page.locator('.ghost-target[data-branch="d3f3"]').click({force:true});
@@ -59,12 +74,19 @@ try{
   await requireState(page,'explore');
   await assert(await page.locator('.square[data-square="f3"] .piece.white').count()===1,'Captured knight not restored');
   await assert(await page.locator('.square[data-square="d3"] .piece.black').count()===1,'Capturing rook not restored');
+  await assert(await page.locator('.ghost-target').count()===groups.d3,
+    'Remaining rook options should still be expanded after second mate');
   // Exhaustive UI path: every legally generated Black reply must be solvable
   // through the board, not merely present in the data validator.
   const remaining=await page.evaluate(()=>window.__mateTwoDebug.branches()
     .filter(b=>b.id!=='d3d2' && b.id!=='d3f3'));
   for(let i=0;i<remaining.length;i++){
     const branch=remaining[i];
+    const targetOrigin=branch.id.slice(0,2);
+    const focused=await page.evaluate(()=>window.__mateTwoDebug.state().focusFrom);
+    if(focused!==targetOrigin)await tapSquare(page,targetOrigin);
+    await assert(await page.locator('.ghost-target').count()===groups[targetOrigin],
+      'Wrong expanded move set for Black source '+targetOrigin);
     await page.locator('.ghost-target[data-branch="'+branch.id+'"]').click({force:true});
     await requireState(page,'mate');
     await tapSquare(page,branch.mateFrom);
@@ -91,7 +113,13 @@ try{
   }
   await page.locator('#resultOverlay').click({force:true});
   await requireState(page,'explore');
-  await assert(await page.locator('.ghost-target.solved').count()===13,'All solved ghost markers missing');
+  await assert(await page.locator('.ghost-target').count()===0,
+    'All move destinations must collapse after proof review');
+  await assert(await page.locator('.branch-origin-done').count()===Object.keys(groups).length,
+    'All Black piece sources should be marked solved');
+  await tapSquare(page,'d3');
+  await assert(await page.locator('.ghost-target.solved').count()===groups.d3,
+    'Previously solved rook options should be revisitable');
   const boxAfter=await page.locator('#board').boundingBox();
   await assert(Math.abs(boxBefore.width-boxAfter.width)<2 && Math.abs(boxBefore.height-boxAfter.height)<2,'Board size jumped during interactions');
   await assert(!errors.length,'Browser exceptions: '+errors.join(' | '));
@@ -107,7 +135,7 @@ try{
   await assert(await page.locator('.square[data-square="g2"] .piece.white').count()===1,'Wrong-Key rewind lost the king');
   await assert(!errors.length,'Browser exceptions after wrong move: '+errors.join(' | '));
 
-  console.log('✓ Browser smoke: Key / all 13 Black branches / capture / rewind / proof completion & skip / board stability / wrong-Key restore');
+  console.log('✓ Browser smoke: per-piece ghost menu / all 13 Black branches / capture / rewind / proof completion & skip / board stability / wrong-Key restore');
 }finally{
   await browser?.close();
   server.kill();
