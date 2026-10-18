@@ -179,7 +179,14 @@ function renderGhosts(){
     button.dataset.branch=b.id;
     button.setAttribute('aria-label','黒 '+b.san+' を検証'+(solved.has(b.id)?' 攻略済み':''));
     button.title=b.san+(solved.has(b.id)?' ✓':'');
-    if(group.length>1)button.style.setProperty('--ghost-shift',((position-(group.length-1)/2)*24)+'%');
+    if(group.length>1){
+      // Several different Black pieces can legally land on the same square.
+      // Divide the square into non-overlapping hit areas so no branch masks another.
+      button.classList.add('stacked');
+      button.style.left=(((position+.5)/group.length)*100)+'%';
+      button.style.width=(92/group.length)+'%';
+      button.style.setProperty('--ghost-shift','0%');
+    }
     button.append(makePiece(source.type,source.color));
     if(solved.has(b.id)){
       const mark=document.createElement('span');mark.className='ghost-check';mark.textContent='✓';button.append(mark);
