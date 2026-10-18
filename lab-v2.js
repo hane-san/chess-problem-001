@@ -433,6 +433,7 @@ async function attemptWhite(move){
     const test=new Chess(played);
     if(test.isCheckmate()){
       completedMate=true;
+      lastPlayedMate=move;
       solved.add(active.id);
       await wait(240);
       if(!valid(token))return;
@@ -471,6 +472,7 @@ async function openBranch(branch){
   if(phase!=='explore')return;
   const token=newOperation();
   focusFrom=branch.from;
+  phase='mate';active=branch;completedMate=false;lastPlayedMate=null;
   setPosition(postKeyFen);
   cue('BLACK DEFENCE','…'+branch.san,'black');
   await wait(reduceMotion.matches?35:160);
@@ -496,10 +498,8 @@ async function returnToExplore(){
   cue('REWIND','Key後の分岐点へ戻る','neutral');
   const afterBlack=branch.afterFen;
   if(completedMate){
-    const mate=branch.mate;
-    const correctBefore=new Chess(afterBlack);
-    // A sound #2 may have more than one mate; remember the actually played move.
-    const played=lastPlayedMate || mate;
+    // A sound #2 may have more than one mating move; undo the exact one just played.
+    const played=lastPlayedMate || branch.mate;
     await rewindMove(afterBlack,played,viewFen,token);
     if(!valid(token))return;
     await wait(120);
@@ -516,6 +516,10 @@ async function returnToExplore(){
 let lastPlayedMate=null;
 async function playProofSweep(){
   if(busy)return;
+  if(phase==='mate'){
+    await returnToExplore();
+    if(busy)return;
+  }
   primeAudio();
   const token=newOperation();
   hideOverlay();
