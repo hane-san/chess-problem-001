@@ -472,7 +472,8 @@ async function openBranch(branch){
   if(phase!=='explore')return;
   const token=newOperation();
   focusFrom=branch.from;
-  phase='mate';active=branch;completedMate=false;lastPlayedMate=null;
+  // Keep White input closed until the Black move physically lands.
+  phase='black';active=branch;completedMate=false;lastPlayedMate=null;
   setPosition(postKeyFen);
   cue('BLACK DEFENCE','…'+branch.san,'black');
   await wait(reduceMotion.matches?35:160);
