@@ -48,6 +48,7 @@ const branches = postKeyEngine.moves({verbose:true}).map((move,index)=>{
   };
 });
 const solved = new Set();
+const blackOrigins = [...new Set(branches.map(branch=>branch.from))];
 let phase = 'key';             // key | explore | mate | complete
 let viewFen = initialFen;
 let active = null;
@@ -152,8 +153,9 @@ function renderBoard(){
       coord.className='coord rank';coord.textContent=sq[1];el.append(coord);
     }
     if(piece && piece.type==='k') el.classList.add('king-square');
-    if(piece && piece.color==='w') {
-      el.setAttribute('aria-label',NAME[piece.type]+' '+sq);
+    if(piece && (piece.color==='w' || (phase==='explore' && blackOrigins.includes(sq)))) {
+      const blackChoice=piece.color==='b' && phase==='explore';
+      el.setAttribute('aria-label',blackChoice?('黒'+NAME[piece.type]+'の手を表示 '+sq):(NAME[piece.type]+' '+sq));
       el.setAttribute('role','button');
       el.tabIndex=0;
     }
@@ -164,34 +166,49 @@ function renderBoard(){
   else lines.replaceChildren();
 }
 function renderGhosts(){
-  board.querySelectorAll('.ghost-target').forEach(el=>el.remove());
-  const sameDest={};
-  branches.forEach(b=>{(sameDest[b.to] ||= []).push(b);});
-  branches.forEach(b=>{
+  board.querySelectorAll('.ghost-target,.branch-origin-count').forEach(el=>el.remove());
+  board.querySelectorAll('.square').forEach(el=>{
+    el.classList.remove('branch-origin','branch-origin-active','branch-origin-done');
+  });
+  // Step one: mark only Black pieces which have at least one legal reply.
+  // Step two: expand only the selected piece's legal target ghost squares.
+  for(const from of blackOrigins){
+    const square=squareElement(from);
+    if(!square)continue;
+    const options=branches.filter(b=>b.from===from);
+    const done=options.filter(b=>solved.has(b.id)).length;
+    square.classList.add('branch-origin');
+    square.classList.toggle('branch-origin-active',focusFrom===from);
+    square.classList.toggle('branch-origin-done',done===options.length);
+    square.setAttribute('aria-label','黒'+NAME[postKeyEngine.get(from).type]+' '+from+' の防御 '+done+'/'+options.length+' 攻略済み');
+    square.setAttribute('role','button');
+    square.tabIndex=0;
+    const counter=document.createElement('span');
+    counter.className='branch-origin-count';
+    counter.textContent=done+'/'+options.length;
+    square.append(counter);
+  }
+  if(!focusFrom){
+    lines.replaceChildren();
+    return;
+  }
+  const options=branches.filter(b=>b.from===focusFrom);
+  options.forEach(b=>{
     const host=squareElement(b.to);
     if(!host)return;
-    const group=sameDest[b.to];
-    const position=group.indexOf(b);
     const source=postKeyEngine.get(b.from);
     const button=document.createElement('button');
     button.type='button';
-    button.className='ghost-target'+(solved.has(b.id)?' solved':'')+(focusFrom && b.from!==focusFrom?' muted':'')+(focusFrom===b.from?' focused':'');
+    button.className='ghost-target focused'+(solved.has(b.id)?' solved':'');
     button.dataset.branch=b.id;
     button.setAttribute('aria-label','黒 '+b.san+' を検証'+(solved.has(b.id)?' 攻略済み':''));
     button.title=b.san+(solved.has(b.id)?' ✓':'');
-    if(group.length>1){
-      // Several different Black pieces can legally land on the same square.
-      // Divide the square into non-overlapping hit areas so no branch masks another.
-      button.classList.add('stacked');
-      button.style.left=(((position+.5)/group.length)*100)+'%';
-      button.style.width=(92/group.length)+'%';
-      button.style.setProperty('--ghost-shift','0%');
-    }
     button.append(makePiece(source.type,source.color));
     if(solved.has(b.id)){
-      const mark=document.createElement('span');mark.className='ghost-check';mark.textContent='✓';button.append(mark);
+      const mark=document.createElement('span');
+      mark.className='ghost-check';mark.textContent='✓';button.append(mark);
     }
-    button.addEventListener('click',(event)=>{
+    button.addEventListener('click',event=>{
       event.stopPropagation();
       if(!busy)openBranch(b);
     });
@@ -201,12 +218,13 @@ function renderGhosts(){
 }
 function drawArrows(){
   lines.replaceChildren();
-  if(phase!=='explore')return;
+  if(phase!=='explore' || !focusFrom)return;
   const bounds=board.getBoundingClientRect();
   if(!bounds.width)return;
   lines.setAttribute('viewBox','0 0 '+bounds.width+' '+bounds.height);
   const svgNS='http://www.w3.org/2000/svg';
-  branches.forEach((b,i)=>{
+  const options=branches.filter(b=>b.from===focusFrom);
+  options.forEach((b,i)=>{
     const a=squareElement(b.from)?.getBoundingClientRect();
     const z=squareElement(b.to)?.getBoundingClientRect();
     if(!a||!z)return;
@@ -221,11 +239,24 @@ function drawArrows(){
     const endX=xx-dx/len*pad,endY=yy-dy/len*pad;
     const path=document.createElementNS(svgNS,'path');
     path.setAttribute('d','M '+x+' '+y+' Q '+cx+' '+cy+' '+endX+' '+endY);
-    path.classList.add('branch-arrow');
+    path.classList.add('branch-arrow','focused');
     if(solved.has(b.id))path.classList.add('solved');
-    if(focusFrom){path.classList.add(focusFrom===b.from?'focused':'muted');}
     lines.append(path);
   });
+}
+function setBlackFocus(from){
+  if(busy || phase!=='explore' || !blackOrigins.includes(from))return;
+  focusFrom=focusFrom===from?null:from;
+  renderGhosts();
+  renderUI();
+  if(focusFrom){
+    const options=branches.filter(b=>b.from===focusFrom);
+    const completed=options.filter(b=>solved.has(b.id)).length;
+    const piece=postKeyEngine.get(focusFrom);
+    setFeedback('黒の '+NAME[piece.type]+' を検証',completed+' / '+options.length+' 手攻略済み。ゴーストを1つ選んで動きを確かめましょう。');
+  }else{
+    setFeedback('どの黒駒から検証しますか？','印の付いた黒駒をタップして、可能な応手を表示します。');
+  }
 }
 function renderTray(){
   branchTray.replaceChildren();
@@ -252,7 +283,9 @@ function renderUI(){
   }else if(phase==='explore'){
     phaseIndex.textContent='02';
     phaseTitle.textContent='黒の防御を選んで検証する';
-    helpText.textContent='黒のゴーストをタップ。黒駒をタップすると、その駒の分岐だけを強調できます。';
+    helpText.textContent=focusFrom
+      ? 'この黒駒の候補から1手選ぶ。別の黒駒をタップして切替・同じ駒でもう一度タップして閉じる。'
+      : '印の付いた黒駒をタップすると、その駒だけの移動候補が開きます。';
   }else if(phase==='mate'){
     phaseIndex.textContent='03';
     phaseTitle.textContent='白の2手目で Checkmate';
@@ -377,9 +410,9 @@ async function transitionMove(beforeFen,move,{duration=290,quiet=false}={},token
   const ok=await animatedMove(move.from,move.to,after.fen(),{capture:!!target,duration,quiet},token);
   return ok?after.fen():null;
 }
-async function rewindMove(beforeFen,move,afterFen,token=sequence){
+async function rewindMove(beforeFen,move,afterFen,token=sequence,duration=390){
   setPosition(afterFen);
-  await animatedMove(move.to,move.from,beforeFen,{reverse:true,duration:240,quiet:true},token);
+  await animatedMove(move.to,move.from,beforeFen,{reverse:true,duration,quiet:true},token);
 }
 function newOperation(){
   sequence+=1;
@@ -400,17 +433,17 @@ async function attemptWhite(move){
   primeAudio();
   const token=newOperation();
   const before=viewFen;
-  const played=await transitionMove(before,move,{duration:265},token);
+  const played=await transitionMove(before,move,{duration:445},token);
   if(!played||!valid(token))return;
-  await wait(190);
+  await wait(reduceMotion.matches?60:295);
   if(!valid(token))return;
   if(phase==='key'){
     if(move.from+move.to===problem.key.uci){
       phase='explore';
       active=null;completedMate=false;focusFrom=null;
       setPosition(postKeyFen);
-      cue('KEY FOUND ✓',problem.key.san+' · 黒のすべての応手を検証','key',1100);
-      setFeedback('KEY FOUND', 'ここから黒のゴーストを選び、どの手にもMateがあるか確かめます。','good');
+      cue('KEY FOUND ✓',problem.key.san+' · 黒駒を1つ選んで防御を読む','key',1450);
+      setFeedback('KEY FOUND', 'まず印の付いた黒駒を選択し、その駒の防御を1手ずつ検証しましょう。','good');
       sound('mate');endOperation(token);paint();return;
     }
     const candidate=new Chess(played);
@@ -424,11 +457,11 @@ async function attemptWhite(move){
     sound('error');
     let refuted=played;
     if(refutation){
-      await wait(240);
+      await wait(reduceMotion.matches?70:360);
       if(!valid(token))return;
-      refuted=await transitionMove(played,refutation,{duration:280},token);
+      refuted=await transitionMove(played,refutation,{duration:450},token);
       if(!refuted)return;
-      await wait(450);
+      await wait(reduceMotion.matches?90:530);
       if(!valid(token))return;
       await rewindMove(played,refutation,refuted,token);
     }else await wait(600);
@@ -443,7 +476,7 @@ async function attemptWhite(move){
       completedMate=true;
       lastPlayedMate=move;
       solved.add(active.id);
-      await wait(240);
+      await wait(reduceMotion.matches?100:405);
       if(!valid(token))return;
       sound('mate');
       showOverlay('CHECKMATE',move.san+' · '+solved.size+' / '+branches.length+' の応手を攻略',solved.size===branches.length?'TAP · PROOF REVIEW':'TAP · VARIATIONS','mate');
@@ -456,11 +489,11 @@ async function attemptWhite(move){
     sound('error');
     let refuted=played;
     if(reply){
-      await wait(230);
+      await wait(reduceMotion.matches?60:350);
       if(!valid(token))return;
-      refuted=await transitionMove(played,reply,{duration:280},token);
+      refuted=await transitionMove(played,reply,{duration:450},token);
       if(!refuted)return;
-      await wait(370);
+      await wait(reduceMotion.matches?70:495);
       if(!valid(token))return;
       await rewindMove(played,reply,refuted,token);
     }else await wait(400);
@@ -484,11 +517,11 @@ async function openBranch(branch){
   phase='black';active=branch;completedMate=false;lastPlayedMate=null;
   setPosition(postKeyFen);
   cue('BLACK DEFENCE','…'+branch.san,'black');
-  await wait(reduceMotion.matches?35:160);
+  await wait(reduceMotion.matches?45:300);
   if(!valid(token))return;
-  const result=await transitionMove(postKeyFen,branch.move,{duration:425},token);
+  const result=await transitionMove(postKeyFen,branch.move,{duration:640},token);
   if(!result||!valid(token))return;
-  await wait(reduceMotion.matches?50:280);
+  await wait(reduceMotion.matches?70:400);
   if(!valid(token))return;
   phase='mate';active=branch;completedMate=false;hintStep=0;
   hideCue();
@@ -515,11 +548,19 @@ async function returnToExplore(){
   }
   await rewindMove(postKeyFen,branch.move,afterBlack,token);
   if(!valid(token))return;
-  await wait(reduceMotion.matches?40:185);
+  await wait(reduceMotion.matches?65:315);
   if(!valid(token))return;
-  phase='explore';active=null;completedMate=false;lastPlayedMate=null;focusFrom=null;
+  phase='explore';active=null;completedMate=false;lastPlayedMate=null;
+  // Preserve the selected Black piece until all of its replies are solved.
+  // This makes the problem feel like clearing one opponent piece at a time.
+  const inGroup=branches.filter(b=>b.from===branch.from);
+  const groupDone=inGroup.every(b=>solved.has(b.id));
+  focusFrom=groupDone?null:branch.from;
   hideCue();
-  setFeedback('次の黒手を選びましょう','攻略済みも再選択できます。好きな順序で考えて大丈夫です。');
+  const left=inGroup.filter(b=>!solved.has(b.id)).length;
+  setFeedback(groupDone?'この黒駒の防御をすべて攻略 ✓':'同じ黒駒の次の応手へ',
+    groupDone?'別の印付き黒駒をタップして続けましょう。':'残り '+left+' 手。ゴーストを選ぶか、別の黒駒へ切り替えられます。',
+    groupDone?'good':'neutral');
   endOperation(token);paint();
 }
 let lastPlayedMate=null;
@@ -551,9 +592,9 @@ async function playProofSweep(){
     cue('CHECKMATE',mate.san+' ✓','key');
     await wait(reduceMotion.matches?25:125);
     if(!valid(token))return;
-    await rewindMove(afterBlack,mate,afterMate,token);
+    await rewindMove(afterBlack,mate,afterMate,token,245);
     if(!valid(token))return;
-    await rewindMove(postKeyFen,b.move,afterBlack,token);
+    await rewindMove(postKeyFen,b.move,afterBlack,token,245);
   }
   if(!valid(token))return;
   proofPlaying=false;
@@ -587,12 +628,7 @@ function startGesture(e){
   if(phase==='explore'){
     if(e.target.closest('.ghost-target'))return;
     const square=e.target.closest('.square');
-    const sq=square?.dataset.square;
-    if(sq && postKeyEngine.get(sq)?.color==='b'){
-      focusFrom=focusFrom===sq?null:sq;
-      renderGhosts();
-      setFeedback(focusFrom?'この黒駒の防御':'黒のすべての応手',focusFrom?'強調されたゴーストから選べます。':'自由に選んで攻略しましょう。');
-    }
+    if(square) setBlackFocus(square.dataset.square);
     return;
   }
   if(phase!=='key'&&phase!=='mate')return;
@@ -643,6 +679,10 @@ board.addEventListener('keydown',e=>{
   const sq=e.target.closest('.square')?.dataset.square;
   if(!sq||busy)return;
   e.preventDefault();
+  if(phase==='explore'){
+    setBlackFocus(sq);
+    return;
+  }
   const move=selected&&targetMove(sq);
   if(move && sq!==selected){clearSelection();attemptWhite(move);}
   else selectFrom(sq);
@@ -676,7 +716,7 @@ $('revealBtn').addEventListener('click',()=>{
     const m=c.moves({verbose:true}).find(move=>{const f=new Chess(c.fen());f.move(moveSpec(move));return f.isCheckmate();});
     if(m)attemptWhite(m);
   }else if(phase==='explore'){
-    setFeedback('黒のゴーストを選択','任意の移動候補を選んでから答えを確認できます。');
+    setFeedback('黒の駒を選択','まず印の付いた黒駒をタップして、候補を開きましょう。');
   }else playProofSweep();
 });
 $('flipBtn').addEventListener('click',()=>{
@@ -701,7 +741,7 @@ $('soundBtn').addEventListener('click',()=>{
 });
 window.addEventListener('resize',()=>{if(phase==='explore')requestAnimationFrame(drawArrows);});
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,solved:solved.size,total:branches.length,active:active?.san,busy}),
+  state:()=>({phase,viewFen,solved:solved.size,total:branches.length,active:active?.san,focusFrom,busy}),
   branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
