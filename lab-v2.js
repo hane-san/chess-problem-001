@@ -615,6 +615,7 @@ async function attemptWhite(move){
     completedMate=true;lastPlayedMate=move;
     for(const branch of defeated)solved.add(branch.id);
     phase='victory';saveProgress();renderUI();
+    setFeedback(defeated.length>1?'同じ一手で'+defeated.length+'体を一括撃破 ✓':'シャドーを攻略 ✓',move.san+' で詰み。破壊の余韻のあと、駒を元の位置へ巻き戻します。','good');
     cue('CHECKMATE ✓',defeated.length>1?'同じ '+move.san+' で '+defeated.length+' 体を一括撃破':'このシャドーを攻略しました','key');sound('mate');
     const king=kingSquare(new Chess(played),'b');squareElement(king)?.classList.add('mate-impact');
     await shadowDefeat([active,...defeated.filter(b=>b.id!==active.id)],move,token);if(!valid(token))return;
