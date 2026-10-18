@@ -1,119 +1,25 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
-  <meta name="theme-color" content="#0b0c10" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>チェスプロブレム #2 — MATE / TWO</title>
-  <link rel="stylesheet" href="styles.css?v=20260817f" />
-  <link rel="stylesheet" href="visual-polish.css?v=20260817f" />
-  <link rel="stylesheet" href="interaction-polish.css?v=20260817f" />
-  <link rel="stylesheet" href="mate-polish.css?v=20260817f" />
-  <style>
-    /* Optical sizing: make the silhouettes readable at a glance.
-       pawn < knight < bishop/rook < queen/king */
-    .piece{
-      width:86%;
-      height:86%;
-      font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","Arial Unicode MS",serif;
-      font-size:clamp(28px,min(8.1vw,8.1vh),60px);
-      line-height:1;
-      transform:translateY(0);
-      transform-origin:center;
-      font-weight:400;
-    }
-    .piece.piece-k{font-size:clamp(30px,min(8.55vw,8.55vh),64px);transform:translateY(-1%)}
-    .piece.piece-q{font-size:clamp(30px,min(8.45vw,8.45vh),63px);transform:translateY(0)}
-    .piece.piece-r{font-size:clamp(28px,min(7.8vw,7.8vh),58px);transform:translateY(1%)}
-    .piece.piece-b{font-size:clamp(28px,min(7.8vw,7.8vh),58px);transform:translateY(0)}
-    .piece.piece-n{font-size:clamp(26px,min(7.25vw,7.25vh),54px);transform:translateY(1%)}
-    .piece.piece-p{font-size:clamp(23px,min(6.35vw,6.35vh),47px);transform:translateY(2%)}
-    .square.selected .piece.piece-k{transform:translateY(-1%)}
-    .square.selected .piece.piece-q{transform:translateY(0)}
-    .square.selected .piece.piece-r{transform:translateY(1%)}
-    .square.selected .piece.piece-b{transform:translateY(0)}
-    .square.selected .piece.piece-n{transform:translateY(1%)}
-    .square.selected .piece.piece-p{transform:translateY(2%)}
-    .piece.white{
-      -webkit-text-stroke:.28px rgba(26,28,27,.74);
-      text-shadow:0 1px 0 rgba(28,31,29,.82),0 0 2px rgba(12,14,13,.46);
-    }
-    .piece.black{
-      -webkit-text-stroke:.18px rgba(241,244,234,.18);
-      text-shadow:0 1px 0 rgba(255,255,255,.18),0 0 1px rgba(255,255,255,.20);
-    }
-
-    .problem-head h1 .headline-prefix{
-      display:block;
-      margin:0 0 7px;
-      font-size:.32em;
-      line-height:1;
-      letter-spacing:.045em;
-      color:#9da5af;
-      font-weight:560;
-    }
-    .problem-head h1 em{display:block;color:#eef1f2}
-
-    .refutation-arrow.answer-mode line{
-      stroke:var(--accent);
-      stroke-width:4.5;
-      stroke-linecap:round;
-      stroke-dasharray:none;
-      animation:none;
-      opacity:.94;
-      filter:drop-shadow(0 0 5px rgba(217,255,99,.45));
-    }
-    .refutation-arrow.answer-mode marker path{fill:var(--accent)}
-    .square.answer-piece .piece{animation:answerPieceGlow .9s ease-in-out infinite}
-    .square.answer-target{box-shadow:inset 0 0 0 5px rgba(217,255,99,.7)}
-    @keyframes answerPieceGlow{
-      0%,100%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 5px rgba(217,255,99,.35))}
-      50%{filter:drop-shadow(0 3px 2px rgba(0,0,0,.2)) drop-shadow(0 0 13px rgba(217,255,99,.95))}
-    }
-
-    @media(max-width:900px){
-      .problem-head{grid-template-columns:1fr!important}
-      .problem-head .eyebrow{display:none!important}
-      .problem-head h1{
-        grid-column:1!important;
-        display:flex!important;
-        align-items:baseline;
-        gap:6px;
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-      }
-      .problem-head h1 .headline-prefix{
-        display:inline;
-        flex:0 0 auto;
-        margin:0;
-        font-size:9px;
-        letter-spacing:.02em;
-      }
-      .problem-head h1 em{display:inline!important;color:#eef1f2!important}
-      .problem-head p{grid-column:1!important}
-    }
-    @media(max-width:430px){
-      .piece.piece-k{font-size:clamp(29px,min(8.9vw,8.25vh),48px)}
-      .piece.piece-q{font-size:clamp(29px,min(8.8vw,8.2vh),47px)}
-      .piece.piece-r,.piece.piece-b{font-size:clamp(27px,min(8.1vw,7.6vh),44px)}
-      .piece.piece-n{font-size:clamp(25px,min(7.55vw,7.1vh),41px)}
-      .piece.piece-p{font-size:clamp(22px,min(6.7vw,6.3vh),36px)}
-    }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#090a0d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>MATE / TWO — Chess Problem Lab</title>
+  <link rel="stylesheet" href="styles.css?v=20261018a">
+  <link rel="stylesheet" href="lab-v2.css?v=20261018a">
 </head>
 <body>
-  <div class="noise"></div>
+  <div class="noise" aria-hidden="true"></div>
   <main class="shell">
     <header class="topbar">
-      <a class="brand" href="#" aria-label="Chess Problem Lab home">
-        <span class="brand-mark">♞</span>
+      <a class="brand" href="." aria-label="MATE / TWO">
+        <span class="brand-mark" aria-hidden="true">♞</span>
         <span><strong>MATE / TWO</strong><small>CHESS PROBLEM LAB</small></span>
       </a>
       <div class="top-actions">
-        <span class="status-pill"><span></span> #2</span>
+        <span class="status-pill"><span></span> DIRECTMATE #2</span>
+        <button class="icon-btn" id="soundBtn" type="button" aria-label="効果音切り替え" aria-pressed="true">♪</button>
         <button class="icon-btn" id="flipBtn" type="button" aria-label="盤面を反転">↻</button>
       </div>
     </header>
@@ -121,83 +27,69 @@
     <section class="workspace">
       <div class="board-column">
         <div class="problem-kicker">
-          <span id="problemId">CP—0001</span>
-          <span class="divider"></span>
-          <span>#2 · 白の2手目で詰み</span>
+          <span>CP—0001</span><span class="divider"></span>
+          <span>#2 · 白の2手目で必ず詰み</span>
         </div>
         <div class="board-wrap">
           <div id="board" class="board" aria-label="チェスプロブレム盤面"></div>
-          <svg id="refutationArrow" class="refutation-arrow" aria-hidden="true">
-            <defs>
-              <marker id="arrowHead" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth">
-                <path d="M0.7,0.8 L6.2,3.5 L0.7,6.2 L2.15,3.5 Z"></path>
-              </marker>
-            </defs>
-            <line id="refutationLine" x1="0" y1="0" x2="0" y2="0" marker-end="url(#arrowHead)"></line>
-          </svg>
+          <svg id="branchLines" class="branch-lines" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div id="boardCue" class="board-cue" aria-live="polite"></div>
+          <button id="resultOverlay" class="result-overlay" type="button" aria-label="結果と次へ進む操作">
+            <strong id="resultTitle">CHECKMATE</strong>
+            <span id="resultDetail"></span>
+            <em id="resultAction">TAP · VARIATIONS</em>
+          </button>
           <div class="board-glow"></div>
         </div>
         <div class="board-foot">
           <div><span class="label">形式</span><strong>#2</strong></div>
           <div><span class="label">テーマ</span><strong>Waiting</strong></div>
-          <div><span class="label">難易度</span><strong>2 / 5</strong></div>
+          <div><span class="label">作者</span><strong>D. J. Shire</strong></div>
         </div>
       </div>
 
       <aside class="panel">
         <section class="problem-head">
-          <div class="eyebrow">PROBLEM 001 · D. J. SHIRE</div>
+          <div class="eyebrow">PROBLEM 001 · D. J. SHIRE · 1997</div>
           <h1><span class="headline-prefix">白の2手目で</span><em>必ず詰ませる。</em></h1>
-          <p>Keyを決め、黒の防御変化を1本ずつ検証し、どの変化にも白の2手目のCheckmateがあることを示します。同じ応手になる防御は代表変化にまとめています。</p>
+          <p>Keyを探し、黒のすべての合法応手を盤上で一つずつ検証。見えているゴーストは、Key後に起こり得る別々の未来です。</p>
         </section>
 
-        <section id="phaseCard" class="phase-card">
+        <section class="phase-card">
           <div class="phase-index">01</div>
-          <div>
-            <span class="label">いまやること</span>
-            <h2 id="phaseTitle">① 初手（Key）を探す</h2>
-            <p id="phaseText" class="is-hidden" aria-hidden="true"></p>
-          </div>
+          <div><span class="label">SOLVING PHASE</span><h2 id="phaseTitle">白の初手 ― Key を探す</h2></div>
         </section>
 
         <section id="feedback" class="feedback neutral" aria-live="polite">
-          <div class="feedback-icon">○</div>
-          <div><strong>まず、白のKeyを探します。</strong><span>駒を長押しすると、その間だけ合法手が見えます。</span></div>
+          <div class="feedback-icon">◇</div>
+          <div><strong>白のKeyを探しましょう</strong><span>白駒をタップすると合法手が表示されます。</span></div>
         </section>
 
-        <section id="defenseSection" class="defense-section is-hidden">
-          <div class="section-title"><span>黒の防御変化 · VARIATIONS</span><small id="defenseCount">0 / 8</small></div>
-          <div id="defenseGrid" class="defense-grid"></div>
-        </section>
+        <p id="helpText">白駒をタップ。表示された合法マスへ指を滑らせて離すと着手します。</p>
 
-        <section class="controls">
-          <button class="btn secondary" id="resetBtn" type="button">やり直す</button>
-          <button class="hint-toggle is-on" id="hintToggle" type="button" role="switch" aria-checked="true" aria-label="ヒント表示">
-            <span>ヒント</span>
-            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-          </button>
-          <button class="btn primary" id="revealBtn" type="button">答えを見る <span>→</span></button>
-        </section>
+        <div class="progress-head">
+          <span>VARIATIONS · <span id="branchCount">— LEGAL REPLIES</span></span>
+          <small id="solvedCount">0 / 13</small>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
 
+        <div id="branchTray" class="branch-tray" aria-label="黒の防御手一覧"></div>
+
+        <div class="lab-controls">
+          <button id="backBtn" type="button" hidden>↶ 分岐へ</button>
+          <button id="showBranchesBtn" type="button" hidden>手順一覧</button>
+          <button id="hintToggle" type="button">ヒント</button>
+          <button id="resetBtn" type="button">リセット</button>
+          <button id="revealBtn" type="button">答え →</button>
+        </div>
         <section class="meta">
-          <div><span class="label">作曲者</span><strong id="composer">D. J. Shire</strong></div>
-          <div><span class="label">出典</span><strong>1997 · The Problemist</strong></div>
+          <div><span class="label">COMPOSER</span><strong>D. J. Shire</strong></div>
+          <div><span class="label">SOURCE</span><strong>1997 · The Problemist Supplement</strong></div>
         </section>
       </aside>
     </section>
-
-    <footer>
-      <span>MATE / TWO</span>
-      <span>#2 · KEY → VARIATION → CHECKMATE</span>
-    </footer>
+    <footer><span>MATE / TWO</span><span>KEY → BLACK POSSIBILITIES → CHECKMATE</span></footer>
   </main>
-  <script type="module" src="app.js?v=20260817f"></script>
-  <script type="module" src="ui-polish.js?v=20260817f"></script>
-  <script type="module" src="motion-polish.js?v=20260817f"></script>
-  <script type="module" src="variation-polish.js?v=20260817f"></script>
-  <script type="module" src="mate-polish.js?v=20260817f"></script>
-  <script src="interaction-polish.js?v=20260817f"></script>
-  <script src="mistake-polish.js?v=20260817f"></script>
-  <script src="viewport-polish.js?v=20260817f"></script>
+  <script type="module" src="lab-v2.js?v=20261018a"></script>
 </body>
 </html>
