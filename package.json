@@ -1,5 +1,20 @@
 {
   "name": "mate-two-chess-problem-lab",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "chess.js": "1.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  },
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "vendor:chess": "node scripts/vendor-chess.mjs",
+    "check:vendor": "node scripts/vendor-chess.mjs --check",
+    "validate": "node scripts/validate-problems.mjs",
+    "test:smoke": "node scripts/ui-smoke.mjs",
+    "test:browser": "playwright test",
+    "test": "npm run check:vendor && npm run validate && npm run test:browser"
+  }
 }
