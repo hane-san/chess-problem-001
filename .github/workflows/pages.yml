@@ -29,11 +29,17 @@ jobs:
             node --check "$file"
           done < <(find . -type f -name '*.js' -not -path './_site/*' -not -path './.git/*' -print0)
 
-      - name: Install chess rules validator
-        run: npm install --no-save chess.js@1.4.0
+      - name: Install validation and browser test dependencies
+        run: npm install --no-save chess.js@1.4.0 playwright@latest
 
       - name: Validate #2 problem data
         run: node scripts/validate-problems.mjs
+
+      - name: Install browser for interaction smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser interaction smoke
+        run: node scripts/ui-smoke.mjs
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
