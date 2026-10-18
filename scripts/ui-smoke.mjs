@@ -59,6 +59,35 @@ try{
   await requireState(page,'explore');
   await assert(await page.locator('.square[data-square="f3"] .piece.white').count()===1,'Captured knight not restored');
   await assert(await page.locator('.square[data-square="d3"] .piece.black').count()===1,'Capturing rook not restored');
+  // Exhaustive UI path: every legally generated Black reply must be solvable
+  // through the board, not merely present in the data validator.
+  const remaining=await page.evaluate(()=>window.__mateTwoDebug.branches()
+    .filter(b=>b.id!=='d3d2' && b.id!=='d3f3'));
+  for(let i=0;i<remaining.length;i++){
+    const branch=remaining[i];
+    await page.locator('.ghost-target[data-branch="'+branch.id+'"]').click({force:true});
+    await requireState(page,'mate');
+    await tapSquare(page,branch.mateFrom);
+    await assert(await page.locator('.square[data-square="'+branch.mateTo+'"].legal').count()===1,
+      branch.san+' mating destination not legal');
+    await tapSquare(page,branch.mateTo);
+    await page.locator('.result-overlay.visible').waitFor({timeout:5000});
+    await assert((await page.locator('#resultTitle').innerText())==='CHECKMATE',
+      branch.san+' did not checkmate');
+    await page.locator('#resultOverlay').click({force:true});
+    if(i<remaining.length-1)await requireState(page,'explore');
+    else{
+      await page.locator('#skipProof').waitFor({state:'visible',timeout:8000});
+      await page.locator('#skipProof').click({force:true});
+      await requireState(page,'complete');
+      await assert(await page.locator('#resultTitle').innerText()==='PROOF COMPLETE','Final proof missing');
+      await assert((await page.evaluate(()=>window.__mateTwoDebug.state())).solved===13,
+        'Did not verify all 13 Black replies');
+    }
+  }
+  await page.locator('#resultOverlay').click({force:true});
+  await requireState(page,'explore');
+  await assert(await page.locator('.ghost-target.solved').count()===13,'All solved ghost markers missing');
   const boxAfter=await page.locator('#board').boundingBox();
   await assert(Math.abs(boxBefore.width-boxAfter.width)<2 && Math.abs(boxBefore.height-boxAfter.height)<2,'Board size jumped during interactions');
   await assert(!errors.length,'Browser exceptions: '+errors.join(' | '));
@@ -74,7 +103,7 @@ try{
   await assert(await page.locator('.square[data-square="g2"] .piece.white').count()===1,'Wrong-Key rewind lost the king');
   await assert(!errors.length,'Browser exceptions after wrong move: '+errors.join(' | '));
 
-  console.log('✓ Browser smoke: Key / 13 ghosts / 2 varied mates / capture / rewind / board stability / wrong-Key restore');
+  console.log('✓ Browser smoke: Key / all 13 Black branches / capture / rewind / proof completion & skip / board stability / wrong-Key restore');
 }finally{
   await browser?.close();
   server.kill();
