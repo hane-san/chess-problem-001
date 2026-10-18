@@ -80,7 +80,6 @@ button, a { -webkit-user-select: none; user-select: none; }
 .ghost-target { position: absolute; inset: 0; width: 100%; height: 100%; display: grid; place-items: center; border: 0; border-radius: 5px; padding: 5px; background: #1c372a17; z-index: 14; touch-action: manipulation; }
 .ghost-target::before { position: absolute; content: ""; inset: 8%; border: 1.5px dashed #f8ffe9; border-radius: 8px; background: #163d2f26; }
 .ghost-target .piece { opacity: .8; width: 82%; height: 82%; --piece-fill: #f2f4dc; --piece-stroke: #3e5a47; }
-.square:has(> .ghost-target) > .piece { visibility: hidden; }
 .ghost-target.solved::before { border-color: #f0ffb7; background: #35563033; }
 .ghost-check { position: absolute; top: 2px; right: 2px; z-index: 15; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: #e2f3ae; color: #263925; font-size: 10px; font-weight: 700; }
 .move-sprite { position: absolute; z-index: 30; display: grid; place-items: center; pointer-events: none; will-change: transform; }
@@ -233,3 +232,54 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
   .capture-burst { display: none; }
 }
+
+/* Shadow conquest: choices have no arrows; only a failed move opens annotations. */
+.shadow-choice { background: transparent; }
+.shadow-choice::before { border-color: #24433280; background: #21392a0d; }
+.shadow-choice .piece { --piece-fill: #193b29; --piece-stroke: #122c20; opacity: .46; filter: drop-shadow(0 2px 2px #18362333); }
+.shadow-choice:hover .piece, .shadow-choice:focus-visible .piece { opacity: .8; }
+.shadow-capture .piece { position: absolute; width: 54%; height: 54%; top: 0; right: 0; opacity: .6; }
+.shadow-capture-mark { position: absolute; right: 2px; bottom: 2px; width: 12px; height: 12px; border-radius: 50%; background: #263c2ed9; color: #dce9cc; font: 11px/12px sans-serif; }
+.ghost-residue { pointer-events: none; z-index: 2; padding: 6px; background: transparent; }
+.ghost-residue::before { border-color: #183a2329; background: transparent; border-width: 1px; }
+.ghost-residue .piece { --piece-fill: transparent; --piece-stroke: #173721; opacity: .22; filter: none; }
+.ghost-residue svg { stroke-dasharray: 2 2; }
+.square.hint-origin { box-shadow: inset 0 0 0 2px #e7ffabbd; }
+.hint-origin > .piece { filter: drop-shadow(0 0 5px #e3ffae) drop-shadow(0 0 10px #e3ffae85); animation: solutionGlow 1.8s ease-in-out infinite; }
+@keyframes solutionGlow { 0%,100% { filter: drop-shadow(0 0 3px #e3ffaeaa); } 50% { filter: drop-shadow(0 0 6px #e3ffae) drop-shadow(0 0 11px #e3ffae99); } }
+.mate-impact::after { content: ""; position: absolute; inset: 8%; border: 3px solid #e5f6a9; border-radius: 50%; z-index: 20; animation: mateRing .65s ease-out both; pointer-events: none; }
+@keyframes mateRing { from { transform: scale(.65); opacity: 1; } to { transform: scale(1.45); opacity: 0; } }
+.victory-attacker { filter: drop-shadow(0 0 7px #e2f4a9); }
+.shadow-defeated { pointer-events: none; }
+.shadow-defeated::before { border-color: #e5f6a9; }
+.branch-origin-done::after { display: none; }
+.branch-origin-done .branch-origin-count { color: #d4e9a3; opacity: .65; }
+.board-legend { color: #ccd6c4; font-size: 11px; line-height: 1.7; margin-top: 10px; padding: 8px 10px; border-left: 2px solid #a8b57e; background: #1c2b21; border-radius: 0 6px 6px 0; }
+.branch-lines { z-index: 18; }
+.analysis-arrow { fill: none; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 1px #19302588); }
+.analysis-arrow.white-control { stroke: #e5f7a7; opacity: .85; }
+.analysis-arrow.black-control { stroke: #f4a38b; opacity: .8; }
+.analysis-arrow.response { stroke-width: 4; stroke-dasharray: 7 3; opacity: 1; }
+.analysis-arrow.check { stroke-width: 3.2; opacity: 1; }
+.square.analysis-controlled { box-shadow: inset 0 0 0 2px #d9f69a99; }
+.square.analysis-escape { box-shadow: inset 0 0 0 3px #c1edf9; }
+.square.analysis-escape::before { position: absolute; content: ""; inset: 0; background: #7dd9ef55; pointer-events: none; z-index: 1; }
+.square.analysis-blocked { box-shadow: inset 0 0 0 2px #3b514693; }
+.square.analysis-king { box-shadow: inset 0 0 0 3px #f5dda1; }
+.square.analysis-black::before { position: absolute; content: ""; inset: 0; background: #f26d4d40; z-index: 1; pointer-events: none; }
+.square.analysis-source { cursor: pointer; }
+.square.analysis-source > .piece { filter: drop-shadow(0 0 4px #f4a38b99); }
+.square.analysis-move-from { box-shadow: inset 0 0 0 3px #e99b7e; }
+.square.analysis-move-to { box-shadow: inset 0 0 0 3px #f4a38b; }
+.analysis-cell-mark { position: absolute; top: 2px; right: 2px; min-width: 14px; z-index: 19; padding: 1px 3px; border-radius: 3px; background: #234539e6; color: #eef9dd; font: 600 9px/1.4 sans-serif; pointer-events: none; }
+.analysis-escape .analysis-cell-mark { color: #102a30; background: #c1edf9; }
+.explanation-panel { padding: 12px; margin-bottom: 18px; border: 1px solid #8b62516b; background: #211f19; border-radius: 10px; }
+.explanation-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.explanation-tabs button { min-height: 44px; min-width: 0; padding: 7px 4px; background: #25291f; border: 1px solid #62614c; border-radius: 7px; font-size: 11px; line-height: 1.5; }
+.explanation-tabs button[aria-pressed="true"] { color: #f6d1b0; border-color: #e8ac88; background: #3d3024; }
+#explanationDetail { margin: 10px 1px; color: #c8c7b4; font-size: 12px; line-height: 1.7; }
+#retryBtn { width: 100%; min-height: 46px; border: 1px solid #dfc190; background: #dfc190; color: #2b2419; border-radius: 8px; font-size: 12px; font-weight: 600; }
+.secondary-controls { flex-wrap: wrap; column-gap: 12px; }
+.secondary-controls .save-status { flex: 1; min-width: 85px; }
+@media (max-width: 430px) { .lab-controls button { padding-left: 7px; padding-right: 7px; } .lab-controls #revealBtn { gap: 5px; } }
+@media (prefers-reduced-motion: reduce) { .hint-origin > .piece, .mate-impact::after { animation: none; } }

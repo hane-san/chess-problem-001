@@ -41,7 +41,7 @@ jobs:
         run: npm ci
 
       - name: Validate #2 problem data
-        run: npm run check:vendor && npm run validate
+        run: npm run check:vendor && npm run validate && npm run test:unit
 
       - name: Install browser for interaction smoke
         run: npx playwright install --with-deps chromium webkit
