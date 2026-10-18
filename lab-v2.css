@@ -57,6 +57,9 @@ body{height:100svh;overflow:hidden}
   box-shadow:0 0 14px rgba(242,250,240,.06);
   transition:opacity .18s,background .18s,border-color .18s;
 }
+.ghost-target.stacked{height:64%;border-radius:7px;overflow:hidden}
+.ghost-target.stacked .piece{font-size:clamp(12px,3.7vw,22px)!important}
+.ghost-target.stacked .ghost-check{top:0;right:0;width:10px;height:10px;font-size:8px;line-height:10px}
 .ghost-target .piece.black{color:#eff7f0;-webkit-text-stroke:.35px #1c2625;text-shadow:0 1px 1px #14211b}
 .ghost-target .piece{opacity:.76;filter:drop-shadow(0 0 2px rgba(255,255,255,.35));font-size:clamp(19px,6vw,39px)!important}
 .ghost-target.muted{opacity:.19}
