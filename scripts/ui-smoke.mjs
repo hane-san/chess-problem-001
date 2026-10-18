@@ -71,7 +71,11 @@ try{
     await assert(await page.locator('.square[data-square="'+branch.mateTo+'"].legal').count()===1,
       branch.san+' mating destination not legal');
     await tapSquare(page,branch.mateTo);
-    await page.locator('.result-overlay.visible').waitFor({timeout:5000});
+    await page.locator('.result-overlay.visible').waitFor({timeout:5000}).catch(async()=>{
+      const state=await page.evaluate(()=>window.__mateTwoDebug.state());
+      const detail=await page.locator('#feedback').innerText();
+      throw new Error('No Checkmate for '+branch.id+' ('+branch.san+' → '+branch.mateFrom+branch.mateTo+'): '+JSON.stringify(state)+' | '+detail+' | errors: '+errors.join(' / '));
+    });
     await assert((await page.locator('#resultTitle').innerText())==='CHECKMATE',
       branch.san+' did not checkmate');
     await page.locator('#resultOverlay').click({force:true});
