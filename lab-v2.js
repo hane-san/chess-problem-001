@@ -67,6 +67,7 @@ let audioOn = true;
 let audioContext = null;
 let overlayAction = null;
 let lastFeedback = '';
+let proofPlaying = false;
 
 function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 function valid(token){return token===sequence;}
@@ -523,6 +524,8 @@ async function playProofSweep(){
   }
   primeAudio();
   const token=newOperation();
+  proofPlaying=true;
+  $('skipProof').hidden=false;
   hideOverlay();
   hideCue();
   for(let i=0;i<branches.length;i++){
@@ -546,6 +549,8 @@ async function playProofSweep(){
     await rewindMove(postKeyFen,b.move,afterBlack,token);
   }
   if(!valid(token))return;
+  proofPlaying=false;
+  $('skipProof').hidden=true;
   phase='complete';active=null;completedMate=false;
   setPosition(postKeyFen);
   sound('mate');
@@ -558,6 +563,7 @@ function hardReset(){
   ++sequence;
   busy=false;gesture=null;selected=null;legal=[];hover=null;focusFrom=null;
   solved.clear();active=null;completedMate=false;lastPlayedMate=null;
+  proofPlaying=false;$('skipProof').hidden=true;
   hintStep=0;phase='key';viewFen=initialFen;listOpen=false;
   hideCue();hideOverlay();paint();
   setFeedback('白のKeyを探しましょう','白駒をタップして合法手を確認し、指を滑らせて移動します。');
@@ -670,6 +676,17 @@ $('flipBtn').addEventListener('click',()=>{
   if(busy)return;
   orientation=orientation==='white'?'black':'white';
   renderBoard();
+});
+$('skipProof').addEventListener('click',()=>{
+  if(!proofPlaying)return;
+  ++sequence;proofPlaying=false;busy=false;
+  $('skipProof').hidden=true;
+  phase='complete';active=null;completedMate=false;lastPlayedMate=null;
+  setPosition(postKeyFen);
+  showOverlay('PROOF COMPLETE','黒の合法応手 '+branches.length+' 手すべてにMateを確認','TAP · REVIEW VARIATIONS','complete');
+  overlayAction=()=>{hideOverlay();phase='explore';paint();};
+  setFeedback('PROOF COMPLETE','全ての黒応手へのMateを確認できました。','good');
+  paint();
 });
 $('soundBtn').addEventListener('click',()=>{
   audioOn=!audioOn;
