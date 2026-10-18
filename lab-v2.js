@@ -695,7 +695,7 @@ $('soundBtn').addEventListener('click',()=>{
 window.addEventListener('resize',()=>{if(phase==='explore')requestAnimationFrame(drawArrows);});
 window.__mateTwoDebug={
   state:()=>({phase,viewFen,solved:solved.size,total:branches.length,active:active?.san,busy}),
-  branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san})),
+  branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
 };
