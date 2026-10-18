@@ -68,8 +68,9 @@ try{
   await requireState(page,'key');
   await tapSquare(page,'g2');
   await tapSquare(page,'g3');
-  await page.waitForFunction(()=>window.__mateTwoDebug?.state().phase==='key'&&document.querySelector('.square[data-square="g2"] .piece.white'),{timeout:6000});
-  await sleep(700);
+  // Wait for the *entire* counterexample animation + reverse, not the first frame.
+  await page.waitForFunction(()=>window.__mateTwoDebug?.state().busy,null,{timeout:2500});
+  await page.waitForFunction(()=>!window.__mateTwoDebug?.state().busy,null,{timeout:9000});
   await assert(await page.locator('.square[data-square="g2"] .piece.white').count()===1,'Wrong-Key rewind lost the king');
   await assert(!errors.length,'Browser exceptions after wrong move: '+errors.join(' | '));
 
