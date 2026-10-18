@@ -2,6 +2,7 @@ import { Chess } from './vendor/chess.js';
 
 export const SQUARES = Array.from({length:8},(_,rank)=>[...'abcdefgh'].map(file=>file+(rank+1))).flat();
 export const spec = move => ({from:move.from,to:move.to,...(move.promotion?{promotion:move.promotion}:{})});
+export const moveId = move => move.from+move.to+(move.promotion||'');
 export const opposite = color => color==='w'?'b':'w';
 export function kingSquare(position,color){return SQUARES.find(square=>position.get(square)?.type==='k'&&position.get(square).color===color);}
 export function matingMoves(position){
@@ -55,9 +56,29 @@ export function chooseDefence(position){
   const options=position.moves({verbose:true});
   return options.map(move=>{
     const next=new Chess(position.fen());next.move(spec(move));
-    const score=(next.isCheckmate()?1000:0)+(move.captured?80:0)+(move.piece==='k'?100:0)+(next.isCheck()?20:0);
+    // A forcing, illustrative reply, not an unbounded engine claim of optimal play.
+    const score=(next.isCheckmate()?10000:0)+(next.isCheck()?400:0)+(move.captured?80:0)+(move.piece==='k'?100:0)-(next.isCheck()?next.moves().length:0);
     return {move,score};
   }).sort((a,b)=>b.score-a.score)[0]?.move || null;
+}
+export function whiteSurvival(position){
+  if(position.turn()!=='w'||position.isGameOver())return null;
+  const checked=position.isCheck();
+  const options=position.moves({verbose:true}).map(move=>({move,score:(checked&&move.piece==='k'?200:0)+(move.captured?80:0)})).sort((a,b)=>b.score-a.score);
+  for(const {move} of options){
+    const next=new Chess(position.fen());next.move(spec(move));
+    // A legal evasion alone must not be advertised as surviving a forced mate in one.
+    if(matingMoves(next).length===0)return {move,fen:next.fen(),wasCheck:checked};
+  }
+  return null;
+}
+export function shadowsDefeatedBy(branches,move){
+  return branches.filter(branch=>{
+    const position=new Chess(branch.afterFen);
+    const candidate=position.moves({verbose:true}).find(m=>moveId(m)===moveId(move));
+    if(!candidate)return false;
+    position.move(spec(candidate));return position.isCheckmate();
+  });
 }
 export function keyRefutation(position,preferredSan=''){
   const refutes=move=>{

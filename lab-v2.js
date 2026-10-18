@@ -1,6 +1,6 @@
 import { Chess } from './vendor/chess.js';
 import { problems } from './data/problems.js';
-import { kingSquare, kingCoverage, controlMap, controlRays, chooseDefence, keyRefutation, describeFailure } from './tactics.js?v=20261018-shadow1';
+import { kingSquare, kingCoverage, controlMap, controlRays, chooseDefence, keyRefutation, describeFailure, whiteSurvival, shadowsDefeatedBy } from './tactics.js?v=20261018-shadow2';
 
 /* MATE / TWO 2.0 — one rules authority, one gesture controller, one animation queue.
    The board is always rendered from a legal chess.js FEN, never from decorative DOM state. */
@@ -83,7 +83,14 @@ let keyboardSquare = 'g2';
 const animations = new Set();
 let persistenceAvailable = true;
 let explanation = null;
-let vanquishing = null;
+let failureRewindTimer = null;
+let playbackStage = null;
+
+function setPlaybackStage(stage){playbackStage=stage;document.body.dataset.playback=stage||'';}
+function pauseFailureRewind(){
+  clearTimeout(failureRewindTimer);failureRewindTimer=null;
+  if(explanation){if(explanation.autoRewind)hideCue();explanation.autoRewind=false;}
+}
 
 function readStorage(key){
   try { return JSON.parse(localStorage.getItem(key)); }
@@ -132,7 +139,7 @@ function recoverOperation(error){
   const returnPhase=explanation?.returnPhase||phase;
   ++sequence;cancelAnimations();cancelGesture();busy=false;proofPlaying=false;
   $('skipProof').hidden=true;hideCue();hideOverlay();
-  explanation=null;vanquishing=null;
+  pauseFailureRewind();explanation=null;setPlaybackStage(null);
   completedMate=false;lastPlayedMate=null;
   if(returnPhase==='key'){phase='key';viewFen=initialFen;active=null;}
   else if(active){phase='mate';viewFen=active.afterFen;}
@@ -268,7 +275,7 @@ function renderGhosts(){
     counter.textContent=remaining?String(remaining):'✓';square.append(counter);
   }
   if(!focusFrom)return;
-  for(const branch of branches.filter(b=>b.from===focusFrom&&(!solved.has(b.id)||vanquishing===b.id))){
+  for(const branch of branches.filter(b=>b.from===focusFrom&&!solved.has(b.id))){
     const host=squareElement(branch.to),button=document.createElement('button');
     button.type='button';button.className='ghost-target shadow-choice';
     if(postKeyEngine.get(branch.to)?.color==='w'){
@@ -294,7 +301,7 @@ function renderResidues(){
 function clearAnalysisMarks(){
   lines.replaceChildren();$('boardLegend').hidden=true;
   board.querySelectorAll('.square').forEach(el=>{
-    el.classList.remove('analysis-king','analysis-controlled','analysis-escape','analysis-blocked','analysis-black','analysis-source','analysis-move-from','analysis-move-to');
+    el.classList.remove('analysis-king','analysis-controlled','analysis-escape','analysis-blocked','analysis-black','analysis-source','analysis-move-from','analysis-move-to','analysis-safe');
     el.querySelectorAll('.analysis-cell-mark').forEach(mark=>mark.remove());
   });
 }
@@ -318,7 +325,8 @@ function drawExplanation(){
     for(const square of 'abcdefgh'.split('').flatMap(file=>[1,2,3,4,5,6,7,8].map(rank=>file+rank)))if(position.get(square)?.color==='b')squareElement(square)?.classList.add('analysis-source');
     $('boardLegend').textContent=e.focusBlack?'黒 '+e.focusBlack+' の利き · 同じ駒でもう一度タップで全体へ':'赤いマス：黒の利き · 黒駒をタップすると絞り込み';
   }else{
-    const data=kingCoverage(position,e.description.coverage.color),enemy=data.color==='b'?'w':'b';
+    const survival=e.mode==='survival'&&e.survival;
+    const data=kingCoverage(position,survival?'w':e.description.coverage.color),enemy=data.color==='b'?'w':'b';
     mark(data.king,'analysis-king');
     for(const cell of data.cells){
       if(cell.kind==='escape')mark(cell.square,'analysis-escape','逃');
@@ -326,7 +334,11 @@ function drawExplanation(){
       else{mark(cell.square,'analysis-controlled');cell.attackers.forEach(from=>arrows.push({from,to:cell.square,color:enemy,kind:'control',knight:position.get(from)?.type==='n'}));}
     }
     data.checkers.forEach(from=>arrows.push({from,to:data.king,color:enemy,kind:'check',knight:position.get(from)?.type==='n'}));
-    $('boardLegend').textContent=data.color==='b'?'青「逃」：黒王の逃げ先 · 緑：白の利き ·「塞」：自駒':'赤：黒の王手・利き ·「塞」：白の自駒';
+    if(survival){
+      arrows.push({from:survival.move.from,to:survival.move.to,color:'w',kind:'survival',knight:survival.move.piece==='n'});
+      mark(survival.move.to,'analysis-safe','受');
+      $('boardLegend').textContent='緑の矢印：白の逃げ・受けの一例 · 赤：黒の利き · 青「逃」：白王の逃げ先';
+    }else $('boardLegend').textContent=data.color==='b'?'青「逃」：黒王の逃げ先 · 緑：白の利き ·「塞」：自駒':'赤：黒の王手・利き ·「塞」：白の自駒';
   }
   $('boardLegend').hidden=false;
   const bounds=board.getBoundingClientRect();if(!bounds.width)return;
@@ -378,6 +390,7 @@ function renderTray(){
   branches.forEach(b=>{
     const button=document.createElement('button');
     button.className='branch-chip'+(solved.has(b.id)?' done':'')+(active?.id===b.id?' active':'');
+    button.dataset.branch=b.id;
     button.textContent=(solved.has(b.id)?'✓ ':'')+'…'+b.san;
     button.type='button';
     button.disabled=busy||!overlay.hidden;
@@ -407,8 +420,8 @@ function renderUI(){
     explore:['02','CHOOSE A SHADOW','攻略するシャドーを選ぶ',focusFrom?'半透明の黒駒を選ぶと、その手だけが実体化します。':'印のある黒駒をタップ。攻略したシャドーは消えていきます。'],
     black:['02','BLACK TO MOVE','黒の '+(active?.san||'応手')+' を確認','ほかの候補は薄い点線で残ります。'],
     mate:['03','DEFEAT THE SHADOW','白の一手でシャドーを攻略',hintsOn?'光る駒は詰みにつながる白駒。移動先を考えましょう。':'白駒を動かして詰みを探しましょう。「応手へ」で戻れます。'],
-    victory:['✓','CHECKMATE','シャドーを攻略しました','駒を元の位置へ戻し、攻略したシャドーを消しています。'],
-    explain:['!','READ THE REFUTATION','黒の応手と利きを確認','解説は止めて読めます。表示を切り替えて理由を確認しましょう。'],
+    victory:['✓','CHECKMATE','シャドーを攻略しました','同じ一手で詰むシャドーをまとめて撃破。余韻のあと巻き戻します。'],
+    explain:['!','READ THE REFUTATION','黒の応手と白の受けを確認',explanation?.autoRewind?'このあと自動で巻き戻し。盤面タップや「止めて読む」で停止できます。':'解説は停止中。表示を切り替えて、納得してからもう一度。'],
     review:['↻','PROOF REVIEW','すべての詰みを振り返る','黒の応手と白の詰みを順に再生しています。'],
     complete:['✓','ALL SHADOWS CLEARED','すべてのシャドーを攻略','全13手に詰みを証明しました。応手一覧から見直せます。']
   };
@@ -428,12 +441,14 @@ function renderUI(){
   $('explanationPanel').hidden=phase!=='explain';
   if(explanation&&phase==='explain'){
     const e=explanation;
-    for(const [id,mode] of [['responseViewBtn','response'],['coverageViewBtn','coverage'],['blackControlBtn','black']]){
-      $(id).setAttribute('aria-pressed',String(e.mode===mode));$(id).disabled=busy||(mode==='response'&&!e.reply);
+    for(const [id,mode] of [['responseViewBtn','response'],['coverageViewBtn','coverage'],['blackControlBtn','black'],['survivalViewBtn','survival']]){
+      $(id).setAttribute('aria-pressed',String(e.mode===mode));$(id).disabled=busy||(mode==='response'&&!e.reply)||(mode==='survival'&&!e.survival);
     }
     $('coverageViewBtn').textContent=e.description.coverage.color==='w'?'② 白王の包囲':'② 黒王の逃げ道';
     $('retryBtn').disabled=busy;
-    $('explanationDetail').textContent=e.mode==='response'?(e.reply?'黒 '+e.reply.san+'：'+e.reply.from+' → '+e.reply.to+'。赤い矢印が実際の応手です。':'黒の合法な応手がありません。'):e.mode==='black'?(e.focusBlack?'黒 '+e.focusBlack+' の利きを表示中。もう一度タップすると黒全体に戻ります。':'赤いマスと各方向の矢印が、周囲の黒駒も含めた利きです。黒駒をタップして絞れます。'):'「逃」は王が合法に移動できるマス。「塞」は自分の駒でふさがったマス。矢印は逃げ先を押さえる利きです。';
+    $('pauseExplanationBtn').disabled=busy||!e.autoRewind;
+    $('pauseExplanationBtn').textContent=e.autoRewind?'Ⅱ 止めて読む':'Ⅱ 解説は停止中';
+    $('explanationDetail').textContent=e.mode==='survival'&&e.survival?'黒 '+e.reply.san+' → 白 '+e.survival.move.san+'。'+(e.survival.wasCheck?'白は王手を外せます。':'白にも合法な応手があります。')+'黒の強い応手に対し、白がしのぐ一例です。':e.mode==='response'?(e.reply?'黒 '+e.reply.san+'：'+e.reply.from+' → '+e.reply.to+'。赤い矢印が実際の応手です。':'黒の合法な応手がありません。'):e.mode==='black'?(e.focusBlack?'黒 '+e.focusBlack+' の利きを表示中。もう一度タップすると黒全体に戻ります。':'赤いマスと各方向の矢印が、周囲の黒駒も含めた利きです。黒駒をタップして絞れます。'):'「逃」は王が合法に移動できるマス。「塞」は自分の駒でふさがったマス。矢印は逃げ先を押さえる利きです。';
   }
   renderTray();
 }
@@ -596,12 +611,16 @@ async function attemptWhite(move){
     sound('mate');endOperation(token);paint();return;
   }
   if(returnPhase==='mate'&&new Chess(played).isCheckmate()){
-    completedMate=true;lastPlayedMate=move;solved.add(active.id);saveProgress();
-    phase='victory';renderUI();
-    cue('CHECKMATE ✓','このシャドーを攻略しました','key');sound('mate');
+    const defeated=shadowsDefeatedBy(branches,move).filter(b=>!solved.has(b.id));
+    completedMate=true;lastPlayedMate=move;
+    for(const branch of defeated)solved.add(branch.id);
+    phase='victory';saveProgress();renderUI();
+    cue('CHECKMATE ✓',defeated.length>1?'同じ '+move.san+' で '+defeated.length+' 体を一括撃破':'このシャドーを攻略しました','key');sound('mate');
     const king=kingSquare(new Chess(played),'b');squareElement(king)?.classList.add('mate-impact');
-    await wait(reduceMotion.matches?180:650);if(!valid(token))return;
-    await rewindBranch(token,{vanquish:true,winningMove:move});return;
+    await shadowDefeat([active,...defeated.filter(b=>b.id!==active.id)],move,token);if(!valid(token))return;
+    setPlaybackStage('hold');
+    await wait(reduceMotion.matches?180:520);if(!valid(token))return;
+    await rewindBranch(token,{defeated});return;
   }
   const position=new Chess(played);
   const trial=problem.tries.find(trial=>trial.uci===move.from+move.to);
@@ -610,7 +629,7 @@ async function attemptWhite(move){
 }
 async function presentFailure(data,token){
   const after=new Chess(data.playedFen);if(data.reply)after.move(moveSpec(data.reply));
-  explanation={...data,afterFen:after.fen(),mode:'response',focusBlack:null};
+  explanation={...data,afterFen:after.fen(),mode:'response',focusBlack:null,survival:data.reply?whiteSurvival(after):null,autoRewind:true};
   explanation.description=describeFailure(data.playedFen,data.reply,after.fen(),data.returnPhase);
   phase='explain';sound('error');renderUI();drawExplanation();
   setFeedback(data.reply?'黒の応手を確認しましょう':'この局面は詰みではありません',data.reply?'黒 '+data.reply.san+' を盤上で再生します。':explanation.description.detail,'bad');
@@ -621,14 +640,29 @@ async function presentFailure(data,token){
     if(!result||!valid(token))return;
     await wait(reduceMotion.matches?100:350);if(!valid(token))return;
   }
-  explanation.mode='coverage';hideCue();
-  setPosition(explanation.afterFen);
+  if(explanation.survival){
+    explanation.mode='survival';renderUI();
+    cue('白の逃げ・受け',explanation.survival.move.san+' でしのぐ一例');
+    await wait(reduceMotion.matches?90:430);if(!valid(token))return;
+    const result=await transitionMove(explanation.afterFen,explanation.survival.move,{duration:650},token);
+    if(!result||!valid(token))return;
+  }else{explanation.mode='coverage';setPosition(explanation.afterFen);}
+  hideCue();
   setFeedback(explanation.description.title,explanation.description.detail,'bad');
   endOperation(token);paint();
+  if(document.hidden){pauseFailureRewind();renderUI();return;}
+  cue(explanation.survival?'黒 '+data.reply.san+' → 白 '+explanation.survival.move.san:'黒の反証','盤面タップで止めて読む · このあと巻き戻し','black');
+  const lesson=explanation;
+  failureRewindTimer=setTimeout(()=>{
+    failureRewindTimer=null;
+    if(valid(token)&&phase==='explain'&&explanation===lesson&&lesson.autoRewind&&!busy)run(retryAttempt);
+  },3800);
 }
 function explanationView(mode){
   if(busy||phase!=='explain'||!explanation)return;
+  pauseFailureRewind();
   if(mode==='response'){run(replayResponse);return;}
+  if(mode==='survival'){run(replaySurvival);return;}
   explanation.mode=mode;explanation.focusBlack=null;
   setPosition(explanation.afterFen);renderUI();ensureBoardVisible();
 }
@@ -641,13 +675,36 @@ async function replayResponse(){
   if(!result||!valid(token))return;
   endOperation(token);
 }
+async function replaySurvival(){
+  if(busy||!explanation?.survival)return;
+  const e=explanation,token=newOperation();e.mode='survival';
+  setPosition(e.afterFen);renderUI();
+  await wait(reduceMotion.matches?120:480);if(!valid(token))return;
+  const result=await transitionMove(e.afterFen,e.survival.move,{duration:700},token);
+  if(!result||!valid(token))return;
+  endOperation(token);
+}
 async function retryAttempt(){
   if(busy||!explanation)return;
-  const e=explanation,token=newOperation();e.mode='none';clearAnalysisMarks();
+  pauseFailureRewind();
+  const e=explanation,token=newOperation();e.mode='none';clearAnalysisMarks();renderUI();
+  cue('TRY BROKEN','この手では詰ませられません','bad');
+  const attempted=new Chess(e.playedFen).get(e.move.to);
+  const echo=effectSprite(e.move.to,attempted,'attempt-defeated');
+  const real=squareElement(e.move.to)?.querySelector(':scope > .piece');
+  if(real&&engine().get(e.move.to)?.color==='w'&&engine().get(e.move.to)?.type===attempted.type)real.style.visibility='hidden';
+  setPlaybackStage('shatter');
+  try{await shatterSprite(echo,e.move.to,token,'failure');}
+  finally{echo?.remove();if(real&&!valid(token))real.style.visibility='';}
+  if(!valid(token))return;
+  setPlaybackStage('hold');
+  await wait(reduceMotion.matches?180:520);if(!valid(token))return;
+  setPlaybackStage('rewind');cue('REWIND','元の局面でもう一度');
+  if(e.survival&&viewFen===e.survival.fen){await rewindMove(e.afterFen,e.survival.move,e.survival.fen,token);if(!valid(token))return;}
   if(e.reply){await rewindMove(e.playedFen,e.reply,e.afterFen,token);if(!valid(token))return;}
   await rewindMove(e.beforeFen,e.move,e.playedFen,token);if(!valid(token))return;
   phase=e.returnPhase;explanation=null;
-  hideCue();setPosition(e.beforeFen);
+  setPlaybackStage(null);hideCue();setPosition(e.beforeFen);
   setFeedback(phase==='key'?'初手をもう一度考えましょう':'このシャドーにもう一度挑戦',hintsOn?'光っている白駒が、正解の手を持っています。':'白駒と移動先をタップして着手できます。');
   endOperation(token);paint();
 }
@@ -671,24 +728,63 @@ async function openBranch(branch){
   setFeedback('黒 '+branch.san+' のシャドーに挑戦',hintsOn?'光る白駒を選び、詰みの一手を探しましょう。ほかの候補は薄い点線で残しています。':'白の2手目で詰ませましょう。ほかの候補は薄い点線で残しています。');
   endOperation(token);paint();
 }
-async function shadowDefeat(branch,winningMove,token){
-  const target=board.querySelector('.shadow-choice[data-branch="'+branch.id+'"]');
-  if(!target)return;
-  target.classList.add('shadow-defeated');
-  const origin=squareElement(winningMove.from),piece=origin?.querySelector(':scope > .piece');
-  let echo;
-  if(piece&&!reduceMotion.matches){
-    const a=origin.getBoundingClientRect(),b=squareElement(branch.to).getBoundingClientRect(),bounds=board.getBoundingClientRect();
-    echo=document.createElement('span');echo.className='victory-attacker move-sprite';
-    Object.assign(echo.style,{left:(a.left-bounds.left)+'px',top:(a.top-bounds.top)+'px',width:a.width+'px',height:a.height+'px'});
-    echo.append(piece.cloneNode(true));board.append(echo);piece.style.visibility='hidden';
-    const dx=b.left-a.left,dy=b.top-a.top,len=Math.hypot(dx,dy)||1;
-    await effectAnimation(echo,[{transform:'translate(0,0) scale(1)'},{transform:'translate('+dx/len*12+'px,'+dy/len*12+'px) scale(1.18)',offset:.4},{transform:'translate(0,0) scale(1)'}],360,token);
+function effectSprite(square,piece,className){
+  if(!piece)return null;
+  const host=squareElement(square);if(!host)return null;
+  const a=host.getBoundingClientRect(),bounds=board.getBoundingClientRect();
+  const sprite=document.createElement('span');sprite.className='move-sprite '+className;sprite.setAttribute('aria-hidden','true');
+  Object.assign(sprite.style,{left:(a.left-bounds.left)+'px',top:(a.top-bounds.top)+'px',width:a.width+'px',height:a.height+'px'});
+  sprite.append(makePiece(piece.type,piece.color));board.append(sprite);return sprite;
+}
+async function shatterSprite(sprite,square,token,tone='victory'){
+  if(!sprite||!valid(token))return;
+  sprite.classList.add('shatter-'+tone);
+  if(reduceMotion.matches){sprite.style.opacity='.35';await wait(110);return;}
+  await effectAnimation(sprite,[{filter:'brightness(1)'},{filter:'brightness(2.1)',transform:'scale(1.1)'}],150,token);
+  if(!valid(token))return;
+  const piece=sprite.querySelector(':scope > .piece');
+  // Six clipped copies preserve the silhouette as the piece breaks apart.
+  const tasks=[];
+  for(let i=0;i<6;i++){
+    const x=i%2,y=Math.floor(i/2),fragment=document.createElement('span');
+    fragment.className='shatter-fragment';
+    fragment.style.clipPath='polygon('+x*50+'% '+y*100/3+'%, '+(x+1)*50+'% '+y*100/3+'%, '+(x+1)*50+'% '+(y+1)*100/3+'%, '+x*50+'% '+(y+1)*100/3+'%)';
+    fragment.append(piece.cloneNode(true));sprite.append(fragment);
+    const dx=(x?1:-1)*(12+y*6),dy=(y-1)*19-6;
+    tasks.push(effectAnimation(fragment,[{opacity:1,transform:'translate(0,0) rotate(0)'},{opacity:0,transform:'translate('+dx+'px,'+dy+'px) rotate('+((x?1:-1)*(18+y*8))+'deg) scale(.65)'}],490,token));
   }
-  if(!valid(token)){echo?.remove();if(piece)piece.style.visibility='';return;}
-  burst(branch.to,token);sound('capture');
-  await effectAnimation(target,[{opacity:.7,transform:'scale(1)'},{opacity:1,filter:'brightness(1.8)',transform:'scale(1.12)',offset:.25},{opacity:0,filter:'blur(5px)',transform:'scale(.3) rotate(-12deg)'}],440,token);
-  echo?.remove();if(piece)piece.style.visibility='';
+  piece.style.visibility='hidden';burst(square,token);
+  await Promise.all(tasks);
+}
+async function shadowDefeat(targets,winningMove,token){
+  const sprites=[],hidden=[];
+  const attackerPiece=engine().get(winningMove.to);
+  const attacker=effectSprite(winningMove.to,attackerPiece,'victory-attacker');
+  const realAttacker=squareElement(winningMove.to)?.querySelector(':scope > .piece');
+  if(realAttacker)realAttacker.style.visibility='hidden';
+  for(const branch of targets){
+    board.querySelector('.ghost-residue[data-branch="'+branch.id+'"]')?.remove();
+    const sprite=effectSprite(branch.to,{type:branch.move.piece,color:'b'},'shadow-defeated'+(branch.id!==active.id?' batch-shadow':''));
+    if(sprite){sprite.dataset.branch=branch.id;sprites.push({sprite,branch});}
+    const actual=squareElement(branch.to)?.querySelector(':scope > .piece');
+    if(actual&&engine().get(branch.to)?.color==='b'){actual.style.visibility='hidden';hidden.push(actual);}
+  }
+  try{
+    setPlaybackStage('impact');
+    if(attacker){
+      const a=squareElement(winningMove.to).getBoundingClientRect(),z=squareElement(active.to).getBoundingClientRect();
+      const dx=z.left-a.left,dy=z.top-a.top,len=Math.hypot(dx,dy)||1;
+      await effectAnimation(attacker,[{transform:'scale(1)'},{transform:'translate('+dx/len*11+'px,'+dy/len*11+'px) scale(1.18)',offset:.45},{transform:'scale(1)'}],340,token);
+    }
+    if(!valid(token))return;
+    setPlaybackStage('shatter');sound('capture');
+    await Promise.all(sprites.map(({sprite,branch})=>shatterSprite(sprite,branch.to,token)));
+  }finally{
+    attacker?.remove();if(realAttacker)realAttacker.style.visibility='';
+    sprites.forEach(({sprite})=>sprite.remove());
+    // Keep defeated pieces absent for the beat; rendering the rewind restores them.
+    if(!valid(token))hidden.forEach(piece=>piece.style.visibility='');
+  }
 }
 async function effectAnimation(element,keyframes,duration,token){
   if(reduceMotion.matches){await wait(90);return valid(token);}
@@ -698,8 +794,9 @@ async function effectAnimation(element,keyframes,duration,token){
   finally{if(animation)animations.delete(animation);}
   return valid(token);
 }
-async function rewindBranch(token,{vanquish=false,winningMove=null}={}){
+async function rewindBranch(token,{defeated=[]}={}){
   const branch=active;if(!branch)return;
+  setPlaybackStage('rewind');cue('REWIND','シャドー選択へ戻ります');
   const afterBlack=branch.afterFen;
   if(completedMate){
     await rewindMove(afterBlack,lastPlayedMate||branch.mate,viewFen,token);if(!valid(token))return;
@@ -707,16 +804,14 @@ async function rewindBranch(token,{vanquish=false,winningMove=null}={}){
   }
   await rewindMove(postKeyFen,branch.move,afterBlack,token);if(!valid(token))return;
   phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;
-  focusFrom=branch.from;vanquishing=vanquish?branch.id:null;
+  focusFrom=branch.from;
   hideCue();setPosition(postKeyFen);renderUI();
-  if(vanquish){cue('SHADOW CLEARED',branch.san+' を攻略','key');await shadowDefeat(branch,winningMove,token);if(!valid(token))return;}
-  vanquishing=null;
   const remaining=branches.filter(b=>b.from===branch.from&&!solved.has(b.id)).length;
   if(!remaining)focusFrom=null;
   const complete=solved.size===branches.length;
-  phase=complete?'complete':'explore';hideCue();
+  phase=complete?'complete':'explore';setPlaybackStage(null);hideCue();
   if(complete){cue('ALL SHADOWS CLEARED','全 '+branches.length+' 手を攻略しました','key',2200);setFeedback('すべてのシャドーを攻略しました','黒の全応手に詰みを証明。盤面がクリアになりました。応手一覧から何度でも見直せます。','good');}
-  else setFeedback(vanquish?'シャドーを1体攻略 ✓':'次のシャドーを選びましょう',remaining?'この黒駒の残り '+remaining+' 体。攻略した候補は盤面から消えました。':'この黒駒の候補はすべて攻略済み。別の印付き黒駒を選びましょう。',vanquish?'good':'neutral');
+  else setFeedback(defeated.length?'シャドーを'+defeated.length+'体攻略 ✓':'次のシャドーを選びましょう',(defeated.length>1?'同じ一手で詰む候補をまとめて撃破。':'')+(remaining?'この黒駒の残り '+remaining+' 体。':'この黒駒の候補はすべて攻略済み。別の印付き黒駒を選びましょう。'),defeated.length?'good':'neutral');
   endOperation(token);paint();
 }
 async function returnToExplore(){
@@ -773,7 +868,8 @@ function hardReset(){
   ++sequence;
   cancelAnimations();cancelGesture();
   busy=false;gesture=null;selected=null;legal=[];hover=null;focusFrom=null;
-  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;vanquishing=null;
+  pauseFailureRewind();setPlaybackStage(null);
+  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;
   proofPlaying=false;$('skipProof').hidden=true;
   phase='key';viewFen=initialFen;listOpen=false;
   hideCue();hideOverlay();paint();
@@ -795,7 +891,7 @@ function startGesture(e){
     if(square) setBlackFocus(square.dataset.square);
     return;
   }
-  if(phase==='explain'){focusAnalysisPiece(e.target.closest('.square')?.dataset.square);return;}
+  if(phase==='explain'){pauseFailureRewind();focusAnalysisPiece(e.target.closest('.square')?.dataset.square);renderUI();return;}
   if(phase!=='key'&&phase!=='mate')return;
   const square=e.target.closest('.square');
   if(!square||!board.contains(square))return;
@@ -852,6 +948,7 @@ function setKeyboardSquare(sq,focus=false){
 }
 board.addEventListener('keydown',e=>{
   if(e.target.closest('.ghost-target'))return;
+  if(phase==='explain'&&!busy){pauseFailureRewind();renderUI();}
   const sq=e.target.closest('.square')?.dataset.square || keyboardSquare;
   const order=rankFiles(),index=order.indexOf(sq);
   if(e.key==='Escape'){e.preventDefault();cancelGesture();clearSelection();return;}
@@ -874,7 +971,7 @@ board.addEventListener('keydown',e=>{
     else setBlackFocus(sq);
     return;
   }
-  if(phase==='explain'){focusAnalysisPiece(sq);return;}
+  if(phase==='explain'){pauseFailureRewind();focusAnalysisPiece(sq);renderUI();return;}
   if(phase!=='key'&&phase!=='mate')return;
   const move=selected&&targetMove(sq);
   if(move && sq!==selected){clearSelection();run(()=>attemptWhite(move));}
@@ -899,6 +996,8 @@ $('strategyBtn').addEventListener('click',()=>{
 $('responseViewBtn').addEventListener('click',()=>explanationView('response'));
 $('coverageViewBtn').addEventListener('click',()=>explanationView('coverage'));
 $('blackControlBtn').addEventListener('click',()=>explanationView('black'));
+$('survivalViewBtn').addEventListener('click',()=>explanationView('survival'));
+$('pauseExplanationBtn').addEventListener('click',()=>{if(!busy){pauseFailureRewind();renderUI();}});
 $('retryBtn').addEventListener('click',()=>run(retryAttempt));
 $('revealBtn').addEventListener('click',()=>{
   if(busy)return;
@@ -917,6 +1016,7 @@ $('revealBtn').addEventListener('click',()=>{
 });
 $('flipBtn').addEventListener('click',()=>{
   if(busy)return;
+  if(phase==='explain')pauseFailureRewind();
   cancelGesture();
   orientation=orientation==='white'?'black':'white';
   renderBoard();renderUI();savePreferences();
@@ -938,14 +1038,14 @@ $('soundBtn').addEventListener('click',()=>{
   primeAudio();renderUI();savePreferences();
 });
 window.addEventListener('blur',()=>{cancelGesture();clearSelection();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();if(phase==='explain'){pauseFailureRewind();renderUI();}}});
 window.addEventListener('resize',()=>{
   cancelGesture();clearSelection();
   if(phase==='explain')requestAnimationFrame(drawExplanation);
 });
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,solved:solved.size,total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase}:null}),
-  branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to})),
+  state:()=>({phase,viewFen,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
+  branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to,mates:b.mates.map(m=>m.from+m.to+(m.promotion||''))})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
 };
