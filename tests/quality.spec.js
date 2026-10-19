@@ -155,7 +155,7 @@ test('save and restore keep cleared shadows, active branch, orientation and audi
   await open(page,app,'d3d4');const fen=(await app.state()).viewFen;
   await app.tap(page.locator('#flipBtn'));await app.tap(page.locator('#soundBtn'));await page.reload();await app.phase('mate');
   expect((await app.state()).viewFen).toBe(fen);await expect(page.locator('#solvedCount')).toHaveText('1 / 13');
-  await expect(page.locator('.square').first()).toHaveAttribute('data-square','h1');await expect(page.locator('#soundBtn')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.square').first()).toHaveAttribute('data-square','h1');await expect(page.locator('#soundBtn')).toHaveAttribute('aria-pressed','false');
   await expect(page.locator('.ghost-residue[data-branch="d3f3"]')).toHaveCount(0);
   await expect(page.locator('.ghost-residue')).toHaveCount(7);
 });
@@ -325,4 +325,49 @@ test('suspended Safari-style move animation finishes under watchdog instead of f
   expect((await app.state()).busy).toBe(false);
   await expect(page.locator('.move-sprite')).toHaveCount(0);
   await expect(app.sq('h2').locator(':scope > .piece.white')).toBeVisible();
+});
+
+
+test('music and effects are independent, persistent and the score schedules seamlessly without file restarts',async({page,app})=>{
+  const initial=await app.state();
+  expect(initial.musicOn).toBe(false);
+  expect(initial.audioOn).toBe(true);
+  await expect(page.locator('#musicBtn')).toHaveAttribute('aria-pressed','false');
+  await app.tap(page.locator('#musicBtn'));
+  await expect(page.locator('#musicBtn')).toHaveAttribute('aria-pressed','true');
+  await expect.poll(async()=>(await app.state()).soundStatus.ready,{timeout:8000}).toBe(true);
+  await expect.poll(async()=>(await app.state()).soundStatus.scheduler).toBe(true);
+  await app.tap(page.locator('#soundBtn'));
+  const after=await app.state();expect(after.audioOn).toBe(false);expect(after.musicOn).toBe(true);
+  await app.tap(page.locator('#musicBtn'));
+  await expect.poll(async()=>(await app.state()).soundStatus.scheduler).toBe(false);
+  await app.tap(page.locator('#soundBtn'));
+  await page.reload();
+  await app.phase('key');
+  const restored=await app.state();expect(restored.audioOn).toBe(true);expect(restored.musicOn).toBe(false);
+});
+
+test('return action and phase banner distinguish replay from a stuck board and restore correct checkpoint',async({page,app})=>{
+  await expect(page.locator('#returnBtn')).toBeHidden();
+  await key(page,app);
+  await app.tap(app.sq('d3'));
+  await expect(page.locator('#returnBtn')).toBeVisible();
+  await expect(page.locator('#returnBtn')).toContainText('駒選択');
+  await app.tap(page.locator('#returnBtn'));
+  await expect(page.locator('.shadow-choice')).toHaveCount(0);
+  await open(page,app,'d3d2');
+  await expect(page.locator('#returnBtn')).toBeVisible();
+  await expect(page.locator('#actionStatus')).toContainText('いつでも戻れます');
+  await app.tap(page.locator('#returnBtn'));
+  await app.phase('explore');
+  await open(page,app,'d3d2');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
+  await expect.poll(async()=>({state:await app.state(),status:await page.locator('#actionStatus').innerText()}),
+    {timeout:10000}).toMatchObject({state:{phase:'victory',busy:true}});
+  await expect(page.locator('#returnBtn')).toBeVisible();
+  await app.tap(page.locator('#returnBtn'));
+  await app.phase('explore');
+  expect((await app.state()).busy).toBe(false);
+  await expect(page.locator('.move-sprite,.shatter-fragment')).toHaveCount(0);
 });
