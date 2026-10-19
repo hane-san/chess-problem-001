@@ -331,3 +331,33 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
 @media (max-width: 430px) {
   .king-identity { font-size: 9px; min-height: 13px; padding: 1px 2px 0; }
 }
+
+/* Quiet score controls: BGM is independent from tactical SE. */
+.bgm-toggle{min-height:44px;min-width:89px;padding:0 11px;border:1px solid #daeac048;background:#1b3027;
+  color:#e8f4d6;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;
+  gap:6px;font:700 11px/1 var(--mono);letter-spacing:.02em;white-space:nowrap;cursor:pointer}
+.bgm-toggle[aria-pressed="true"]{background:#31452c;border-color:#d9f6acb3;color:#f3ffd0}
+.bgm-toggle[aria-pressed="true"]::before{content:"";width:5px;height:5px;border-radius:50%;background:#dbf2a8;box-shadow:0 0 6px #dbf2a888}
+.bgm-toggle:focus-visible{outline:3px solid #e9f9bd;outline-offset:2px}
+.action-bar{display:flex;align-items:center;gap:8px;min-height:46px;margin:0 0 9px;padding:5px 7px 5px 11px;
+  border:1px solid #627c6257;background:#1b2921;border-radius:9px}
+.action-indicator{width:7px;height:7px;flex:none;border:1px solid #b7cbb0;border-radius:50%;background:#c4e2a0}
+.action-status{font:600 11px/1.45 var(--sans,system-ui);color:#d4e3d1;flex:1;min-width:0}
+#returnBtn{flex:none;min-height:44px;max-width:55%;padding:8px 10px;border:1px solid #ddf3ad85;
+  border-radius:8px;background:#33452c;color:#e7f9b9;font:700 11px/1.3 var(--sans,system-ui);
+  cursor:pointer;touch-action:manipulation}
+#returnBtn[hidden]{display:none}
+#returnBtn:focus-visible{outline:3px solid #e7f9b9;outline-offset:2px}
+body[data-busy="true"] .action-bar{border-color:#d7e3a088;background:#283322}
+body[data-busy="true"] .action-indicator{animation:waitingPulse 1.15s ease-in-out infinite;background:#e7f5b5}
+@keyframes waitingPulse{0%,100%{opacity:1;box-shadow:0 0 0 1px #e7f5b52e}50%{opacity:.52;box-shadow:0 0 0 6px #e7f5b521}}
+body[data-playback="rewind"] .action-indicator{background:#bad6e4}
+body[data-playback="mate-proof"] .action-indicator{background:#f5d18d}
+@media(max-width:430px){
+  .bgm-toggle{min-width:44px;width:44px;height:44px;padding:0;font-size:18px}
+  .bgm-toggle span{display:none}
+  .action-bar{padding-left:8px;gap:5px}
+  .action-status{font-size:10px}
+  #returnBtn{font-size:10px;padding:8px 7px}
+}
+@media(prefers-reduced-motion:reduce){body[data-busy="true"] .action-indicator{animation:none}}
