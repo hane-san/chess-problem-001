@@ -1,4 +1,5 @@
 import { Chess } from './vendor/chess.js';
+import { Soundscape } from './soundscape.js';
 import { problems } from './data/problems.js';
 import { kingSquare, kingCoverage, controlMap, controlRays, chooseDefence, keyRefutation, describeFailure, whiteSurvival, shadowsDefeatedBy } from './tactics.js?v=20261018-shadow2';
 
@@ -74,8 +75,9 @@ let sequence = 0;
 let hintsOn = true;
 let listOpen = false;
 let orientation = 'white';
-let audioOn = false;
-let audioContext = null;
+let audioOn = true;
+let musicOn = false;
+const soundscape = new Soundscape();
 let overlayAction = null;
 let proofPlaying = false;
 let cueTimer = null;
@@ -101,7 +103,7 @@ function writeStorage(key,value){
   try { localStorage.setItem(key,JSON.stringify(value)); }
   catch { persistenceAvailable=false; }
 }
-function savePreferences(){writeStorage(PREFERENCES_KEY,{audioOn,orientation,hintsOn});}
+function savePreferences(){writeStorage(PREFERENCES_KEY,{audioOn,musicOn,orientation,hintsOn});}
 function saveProgress(){
   // Save a legal checkpoint, never an intermediate animation frame.
   const checkpoint=phase==='black'?'mate':phase==='explain'?explanation.returnPhase:['complete','victory','review'].includes(phase)?'explore':phase;
@@ -113,7 +115,10 @@ function saveProgress(){
 }
 function restoreProgress(){
   const preferences=readStorage(PREFERENCES_KEY);
-  audioOn=preferences?.audioOn===true;
+  audioOn=preferences?.audioOn!==false;
+  musicOn=preferences?.musicOn===true;
+  soundscape.effectsOn=audioOn;
+  soundscape.musicOn=musicOn;
   orientation=preferences?.orientation==='black'?'black':'white';
   hintsOn=preferences?.hintsOn!==false;
   const saved=readStorage(PROGRESS_KEY);
@@ -501,7 +506,36 @@ function renderUI(){
   backBtn.hidden=phase!=='mate';backBtn.disabled=busy;
   showBranchesBtn.hidden=['key','explain','black','victory','review'].includes(phase);
   showBranchesBtn.textContent=listOpen?'一覧を閉じる':'応手一覧';showBranchesBtn.setAttribute('aria-expanded',String(listOpen));
-  $('soundBtn').setAttribute('aria-pressed',String(audioOn));$('soundBtn').setAttribute('aria-label','効果音 '+(audioOn?'オン':'オフ'));
+  $('soundBtn').setAttribute('aria-pressed',String(audioOn));
+  $('soundBtn').setAttribute('aria-label','効果音 '+(audioOn?'オン':'オフ'));
+  $('musicBtn').setAttribute('aria-pressed',String(musicOn));
+  $('musicBtn').setAttribute('aria-label','BGM '+(musicOn?'オン':'オフ'));
+  $('musicBtn').querySelector('span').textContent=musicOn?'BGM ON':'BGM OFF';
+  const returning=busy||['black','mate','explain','victory','review','complete'].includes(phase)||(phase==='explore'&&!!focusFrom);
+  $('returnBtn').hidden=!returning;
+  const status=busy
+    ? playbackStage==='mate-proof'?'CHECKMATEの理由を盤面で説明中'
+      :playbackStage==='rewind'?'巻き戻し中 · このあと操作できます'
+      :playbackStage==='shatter'?'破壊演出中 · 戻ることもできます'
+      :playbackStage==='hold'?'局面の変化を確認中'
+      :phase==='black'?'黒の防御を再生しています'
+      :phase==='review'?'全変化を再生しています'
+      :phase==='explain'?'反証と逃げ道を再生しています'
+      :phase==='victory'?'CHECKMATEを確認中'
+      :'白の一手を再生しています'
+    :phase==='key'?'白のKeyを探す · 駒をタップ'
+      :phase==='explore'?(focusFrom?'この黒駒のゴーストから1つ選択':'印のある黒駒を選んで分岐を表示')
+      :phase==='mate'?'白の詰み手を試す · いつでも戻れます'
+      :phase==='explain'?(explanation?.autoRewind?'反証を読む · 自動で巻き戻ります':'反証を読む · 戻るボタンで再挑戦')
+      :phase==='complete'?'全応手を攻略済み · 再訪できます'
+      :'次の手を考えましょう';
+  $('actionStatus').textContent=status;
+  $('returnBtn').textContent=busy?'↶ 演出を中断して戻る'
+    :phase==='review'?'再生を終了'
+    :phase==='complete'?'↶ 応手を見直す'
+    :phase==='explain'?'↶ 巻き戻して再挑戦'
+    :phase==='explore'?'↶ 駒選択を閉じる'
+    :'↶ 黒の選択へ戻る';
   $('flipBtn').setAttribute('aria-pressed',String(orientation==='black'));$('flipBtn').disabled=busy;
   $('hintToggle').setAttribute('aria-pressed',String(hintsOn));$('hintToggle').textContent='✧ 駒ヒント '+(hintsOn?'ON':'OFF');
   const locked=busy||!overlay.hidden;
@@ -533,37 +567,9 @@ function paint(){
   renderUI();
 }
 function primeAudio(){
-  if(!audioOn)return;
-  try{
-    const A=window.AudioContext||window.webkitAudioContext;
-    if(!A)return;
-    audioContext ||= new A();
-    if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});
-  }catch{}
+  if(audioOn||musicOn)void soundscape.unlock();
 }
-function tone(freq,duration=0.06,volume=.035,type='triangle'){
-  if(!audioOn||!audioContext||audioContext.state!=='running')return;
-  const t=audioContext.currentTime;
-  const osc=audioContext.createOscillator(), gain=audioContext.createGain();
-  osc.type=type;osc.frequency.setValueAtTime(freq,t);
-  osc.frequency.exponentialRampToValueAtTime(freq*.78,t+duration);
-  gain.gain.setValueAtTime(volume,t);
-  gain.gain.exponentialRampToValueAtTime(.0001,t+duration);
-  osc.connect(gain);gain.connect(audioContext.destination);
-  osc.start(t);osc.stop(t+duration+.008);
-}
-function sound(kind){
-  if(kind==='capture'){
-    tone(740,.095,.05,'sawtooth');
-    setTimeout(()=>tone(270,.12,.04,'triangle'),35);
-  }else if(kind==='mate'){
-    tone(660,.11,.035);setTimeout(()=>tone(990,.14,.035),100);
-  }else if(kind==='error'){
-    tone(260,.12,.025);
-  }else{
-    tone(490,.065,.032);
-  }
-}
+function sound(kind){ soundscape.effect(kind); }
 function burst(square,token){
   if(!valid(token))return;
   const host=squareElement(square);
@@ -680,7 +686,7 @@ async function attemptWhite(move){
     setPosition(postKeyFen);
     cue('KEY FOUND ✓','黒駒 → シャドーの順に選んで攻略','key',1350);
     setFeedback('初手を発見。シャドー攻略へ','印の付いた黒駒を選ぶと、その駒の移動先にシャドーが現れます。','good');
-    sound('mate');endOperation(token);paint();return;
+    sound('key');endOperation(token);paint();return;
   }
   if(returnPhase==='mate'&&new Chess(played).isCheckmate()){
     const defeated=shadowsDefeatedBy(branches,move).filter(b=>!solved.has(b.id));
@@ -784,7 +790,7 @@ async function retryAttempt(){
   if(!valid(token))return;
   setPlaybackStage('hold');
   await wait(reduceMotion.matches?180:520);if(!valid(token))return;
-  setPlaybackStage('rewind');cue('REWIND','元の局面でもう一度');
+  setPlaybackStage('rewind');cue('REWIND','元の局面でもう一度');sound('rewind');
   if(e.survival&&viewFen===e.survival.fen){await rewindMove(e.afterFen,e.survival.move,e.survival.fen,token);if(!valid(token))return;}
   if(e.reply){await rewindMove(e.playedFen,e.reply,e.afterFen,token);if(!valid(token))return;}
   await rewindMove(e.beforeFen,e.move,e.playedFen,token);if(!valid(token))return;
@@ -809,7 +815,7 @@ async function openBranch(branch){
   const result=await transitionMove(postKeyFen,branch.move,{duration:640},token);
   if(!result||!valid(token))return;
   await wait(reduceMotion.matches?70:250);if(!valid(token))return;
-  phase='mate';hideCue();
+  phase='mate';hideCue();sound('black');
   setFeedback('黒 '+branch.san+' のシャドーに挑戦',hintsOn?'光る白駒を選び、詰みの一手を探しましょう。ほかの候補は薄い点線で残しています。':'白の2手目で詰ませましょう。ほかの候補は薄い点線で残しています。');
   endOperation(token);paint();
 }
@@ -881,7 +887,7 @@ async function effectAnimation(element,keyframes,duration,token){
 }
 async function rewindBranch(token,{defeated=[]}={}){
   const branch=active;if(!branch)return;
-  setPlaybackStage('rewind');cue('REWIND','シャドー選択へ戻ります');
+  setPlaybackStage('rewind');cue('REWIND','シャドー選択へ戻ります');sound('rewind');
   const afterBlack=branch.afterFen;
   if(completedMate){
     await rewindMove(afterBlack,lastPlayedMate||branch.mate,viewFen,token);if(!valid(token))return;
@@ -1121,7 +1127,28 @@ $('skipProof').addEventListener('click',()=>{
 function finishReview(){hideOverlay();phase='explore';focusFrom=null;paint();saveProgress();}
 $('soundBtn').addEventListener('click',()=>{
   audioOn=!audioOn;
-  primeAudio();renderUI();savePreferences();
+  soundscape.setEffects(audioOn);
+  renderUI();savePreferences();
+});
+$('musicBtn').addEventListener('click',()=>{
+  musicOn=!musicOn;
+  soundscape.setMusic(musicOn);
+  renderUI();savePreferences();
+});
+$('returnBtn').addEventListener('click',()=>{
+  if(busy){
+    if(proofPlaying){$('skipProof').click();return;}
+    settleInterruptedOperation();
+    return;
+  }
+  if(phase==='explain'){run(retryAttempt);return;}
+  if(phase==='complete'){finishReview();return;}
+  if(phase==='explore'){
+    focusFrom=null;renderGhosts();renderUI();saveProgress();
+    setFeedback('黒駒を選んで防御を確認','印のある駒から、もう一度別の変化を選べます。');
+    return;
+  }
+  run(returnToExplore);
 });
 window.addEventListener('blur',()=>{cancelGesture();clearSelection();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();if(busy)settleInterruptedOperation();else if(phase==='explain'){pauseFailureRewind();renderUI();}}});
@@ -1131,7 +1158,7 @@ window.addEventListener('resize',()=>{
   if(phase==='explain')requestAnimationFrame(drawExplanation);
 });
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,mateProof:!!mateProof,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
+  state:()=>({phase,viewFen,audioOn,musicOn,soundStatus:soundscape.status(),mateProof:!!mateProof,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
   branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to,mates:b.mates.map(m=>m.from+m.to+(m.promotion||''))})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
