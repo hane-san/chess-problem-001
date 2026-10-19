@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>MATE / TWO — Chess Problem Lab</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=20261019-mateproof1">
+  <link rel="stylesheet" href="styles.css?v=20261019-soundscape1">
 </head>
 <body>
   <a class="skip-link" href="#board">盤面へ移動</a>
@@ -20,6 +20,7 @@
       </a>
       <div class="top-actions">
         <span class="status-pill">DIRECTMATE <b>#2</b></span>
+        <button class="bgm-toggle" id="musicBtn" type="button" aria-pressed="false" aria-label="BGM オフ" title="BGMを再生・停止">♫ <span>BGM OFF</span></button>
         <button class="icon-btn" id="soundBtn" type="button" aria-label="効果音" aria-pressed="false" title="効果音"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-off" d="m16 9 5 6m0-6-5 6"/></svg></button>
         <button class="icon-btn" id="flipBtn" type="button" aria-label="盤面を反転" aria-pressed="false" title="盤面を反転"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h15l-4-4M20 16H5l4 4"/></svg></button>
       </div>
@@ -61,6 +62,12 @@
           <li data-step="explore"><span>02</span> 黒の応手</li>
           <li data-step="mate"><span>03</span> 詰ませる</li>
         </ol>
+
+        <div id="actionBar" class="action-bar" role="status" aria-live="polite">
+          <span class="action-indicator" aria-hidden="true"></span>
+          <span id="actionStatus" class="action-status">白の初手を考える · 駒を選択</span>
+          <button id="returnBtn" type="button" hidden>↶ 黒の選択へ戻る</button>
+        </div>
 
         <section class="phase-card">
           <div class="phase-index">01</div>
@@ -118,7 +125,7 @@
   <div id="startupError" class="startup-error" role="alert" hidden><strong>盤面を読み込めませんでした</strong><p>ページを再読み込みしてください。進み具合はこの端末に保存されています。</p><button type="button" onclick="location.reload()">再読み込み</button></div>
   <noscript><p class="noscript">このアプリを使うにはJavaScriptを有効にしてください。</p></noscript>
   <script type="module">
-    import('./lab-v2.js?v=20261019-mateproof1').catch(() => {
+    import('./lab-v2.js?v=20261019-soundscape1').catch(() => {
       document.getElementById('startupError').hidden = false;
     });
   </script>
