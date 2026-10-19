@@ -84,6 +84,9 @@ let cueTimer = null;
 let keyboardSquare = 'g2';
 const animations = new Set();
 let mateProof = null;
+let mateProofStep = null;
+let moveTrace = null;
+let motionTimer = null;
 let persistenceAvailable = true;
 let explanation = null;
 let failureRewindTimer = null;
@@ -139,7 +142,7 @@ function cancelGesture(){
   if(gesture){try{board.releasePointerCapture(gesture.id);}catch{}}
   gesture=null;hover=null;
 }
-function cancelAnimations(){for(const animation of animations)animation.cancel();animations.clear();}
+function cancelAnimations(){for(const animation of animations)animation.cancel();animations.clear();clearMotionGuide();}
 // Safari may suspend Web Animations without settling animation.finished.
 async function settleAnimation(animation,duration){
   let watchdog;
@@ -245,6 +248,65 @@ function showOverlay(title,detail,action,kind='mate'){
   overlay.focus({preventScroll:true});
 }
 function squareElement(sq){return board.querySelector('[data-square="'+sq+'"]');}
+function clearMotionGuide(){
+  clearTimeout(motionTimer);motionTimer=null;moveTrace=null;
+  $('motionCaption').hidden=true;$('motionLines').replaceChildren();
+  board.querySelectorAll('.motion-from,.motion-to,.motion-arrived').forEach(el=>
+    el.classList.remove('motion-from','motion-to','motion-arrived'));
+  board.querySelectorAll('.motion-echo').forEach(el=>el.remove());
+}
+function showMotionGuide(from,to,{reverse=false,capture=false}={}){
+  clearMotionGuide();
+  const initial=engine(),piece=initial.get(from);
+  if(!piece)return;
+  const black=piece.color==='b';
+  const label=reverse?'↶ 巻き戻し':black?'BLACK DEFENCE':phase==='key'?'WHITE KEY':'WHITE MATE';
+  const caption=$('motionCaption');
+  caption.className='motion-caption '+(black?'black-turn':'white-turn')+(reverse?' reversing':'');
+  $('motionStep').textContent=label+(capture&&!reverse?' · CAPTURE':'');
+  $('motionMove').textContent=from+' → '+to;
+  caption.hidden=false;
+  moveTrace={from,to,reverse,color:piece.color,capture};
+  const source=squareElement(from),target=squareElement(to);
+  source?.classList.add('motion-from');
+  target?.classList.add('motion-to');
+  const pieceElement=source?.querySelector(':scope > .piece');
+  if(pieceElement){
+    const echo=pieceElement.cloneNode(true);
+    echo.classList.add('motion-echo');
+    echo.setAttribute('aria-hidden','true');source.append(echo);
+  }
+  const svg=$('motionLines'),bounds=board.getBoundingClientRect();
+  const a=source?.getBoundingClientRect(),b=target?.getBoundingClientRect();
+  if(!a||!b||!bounds.width)return;
+  svg.setAttribute('viewBox','0 0 '+bounds.width+' '+bounds.height);
+  const x=a.left-bounds.left+a.width/2,y=a.top-bounds.top+a.height/2;
+  const xx=b.left-bounds.left+b.width/2,yy=b.top-bounds.top+b.height/2;
+  const dx=xx-x,dy=yy-y,l=Math.hypot(dx,dy)||1;
+  const offset=Math.min(11,l*.07);
+  const cx=(x+xx)/2-dy/l*offset,cy=(y+yy)/2+dx/l*offset;
+  const endX=xx-dx/l*Math.min(12,l*.15),endY=yy-dy/l*Math.min(12,l*.15);
+  const ns='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(ns,'defs'),marker=document.createElementNS(ns,'marker');
+  marker.id='motion-arrow-tip';marker.setAttribute('viewBox','0 0 10 10');
+  marker.setAttribute('refX','8');marker.setAttribute('refY','5');
+  marker.setAttribute('markerWidth','4.7');marker.setAttribute('markerHeight','4.7');
+  marker.setAttribute('orient','auto');
+  const head=document.createElementNS(ns,'path');head.setAttribute('d','M0 0 L10 5 L0 10 Z');
+  head.setAttribute('fill',black?'#f8aa8a':'#f5ffb9');
+  marker.append(head);defs.append(marker);svg.append(defs);
+  const path=document.createElementNS(ns,'path');
+  path.setAttribute('d','M '+x+' '+y+' Q '+cx+' '+cy+' '+endX+' '+endY);
+  path.setAttribute('marker-end','url(#motion-arrow-tip)');
+  path.classList.add('motion-arrow',black?'black':'white');
+  svg.append(path);
+}
+function settleMotionGuide(to){
+  if(!moveTrace)return;
+  board.querySelector('[data-square="'+to+'"]')?.classList.add('motion-arrived');
+  motionTimer=setTimeout(clearMotionGuide,reduceMotion.matches?200:720);
+}
+
 function rankFiles(){
   const ranks = orientation==='white'?[8,7,6,5,4,3,2,1]:[1,2,3,4,5,6,7,8];
   const files = orientation==='white'?'abcdefgh':'hgfedcba';
@@ -378,8 +440,8 @@ function drawExplanation(){
   };
   if(e.mode==='mate-proof'){
     const data=kingCoverage(position,'b');
-    mark(data.king,'analysis-king','詰');
-    for(const cell of data.cells){
+    mark(data.king,'analysis-king',mateProofStep==='check'?'王手':'詰');
+    if(mateProofStep!=='check')for(const cell of data.cells){
       if(cell.kind==='occupied')mark(cell.square,'analysis-blocked','塞');
       else if(cell.kind==='controlled'){
         mark(cell.square,'analysis-controlled','×');
@@ -391,7 +453,7 @@ function drawExplanation(){
     for(const from of data.checkers){
       if(position.get(from))arrows.push({from,to:data.king,color:'w',kind:'check',knight:position.get(from).type==='n'});
     }
-    $('boardLegend').textContent='CHECKMATE · 王手 '+data.checkers.length+' / 王の逃げ道 '+data.escapes.length+' / 黒の合法応手 0。緑の矢印は白の利き、「×」は押さえられたマス、「塞」は黒自身の駒です。';
+    $('boardLegend').textContent=mateProofStep==='check'?'① 王手の確認 · 緑の矢印が黒王へ向かう白の攻撃です。':'② 逃げ道の確認 · 黒の合法応手 0。緑は白の利き、「×」は移動できないマス、「塞」は黒自身の駒です。';
   }else if(e.mode==='response'){
     if(e.reply){arrows.push({from:e.reply.from,to:e.reply.to,color:'b',kind:'response',knight:e.reply.piece==='n'});mark(e.reply.from,'analysis-move-from');mark(e.reply.to,'analysis-move-to');}
     $('boardLegend').textContent='赤い矢印：黒の実際の応手';
@@ -587,7 +649,8 @@ function burst(square,token){
 async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse=false,quiet=false}={},token=sequence){
   if(!valid(token))return false;
   if(reduceMotion.matches){
-    setPosition(afterFen);
+    showMotionGuide(from,to,{reverse,capture});
+    setPosition(afterFen);settleMotionGuide(to);
     if(!quiet)sound(capture&&!reverse?'capture':'move');
     return true;
   }
@@ -597,6 +660,7 @@ async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse
     if(valid(token))setPosition(afterFen);
     return valid(token);
   }
+  showMotionGuide(from,to,{reverse,capture});
   const a=origin.getBoundingClientRect(),b=destination.getBoundingClientRect();
   const boardRect=board.getBoundingClientRect();
   const sprite=document.createElement('div');
@@ -633,7 +697,7 @@ async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse
     piece.style.visibility='';
   }
   if(!valid(token))return false;
-  setPosition(afterFen);
+  setPosition(afterFen);settleMotionGuide(to);
   return true;
 }
 async function transitionMove(beforeFen,move,{duration=290,quiet=false}={},token=sequence){
@@ -645,7 +709,7 @@ async function transitionMove(beforeFen,move,{duration=290,quiet=false}={},token
   const ok=await animatedMove(move.from,move.to,after.fen(),{capture:!!target,duration,quiet},token);
   return ok?after.fen():null;
 }
-async function rewindMove(beforeFen,move,afterFen,token=sequence,duration=390){
+async function rewindMove(beforeFen,move,afterFen,token=sequence,duration=490){
   if(!valid(token))return;
   setPosition(afterFen);
   await animatedMove(move.to,move.from,beforeFen,{reverse:true,duration,quiet:true},token);
@@ -678,7 +742,7 @@ async function attemptWhite(move){
   if(busy||!move||completedMate||!['key','mate'].includes(phase))return;
   primeAudio();
   const returnPhase=phase,before=viewFen,token=newOperation();
-  const played=await transitionMove(before,move,{duration:445},token);
+  const played=await transitionMove(before,move,{duration:545},token);
   if(!played||!valid(token))return;
   await wait(reduceMotion.matches?60:220);if(!valid(token))return;
   if(returnPhase==='key'&&move.from+move.to===problem.key.uci){
@@ -699,15 +763,20 @@ async function attemptWhite(move){
     squareElement(king)?.classList.add('mate-impact');
     // A real checkmate has no legal Black response; explain it rather than
     // manufacturing an impossible King escape animation.
-    mateProof=true;
+    mateProof=true;mateProofStep='check';
     drawExplanation();
     setPlaybackStage('mate-proof');
     const coverage=kingCoverage(new Chess(played),'b');
-    setFeedback('CHECKMATE · 黒は一手も指せません',
-      '王手 '+coverage.checkers.length+'、黒王の合法な逃げ道 '+coverage.escapes.length+'。緑の矢印と「×」「塞」で詰みの理由を確認できます。','good');
-    cue('CHECKMATE','黒の合法応手 0 · 王手と逃げ道を確認','key');
-    await wait(reduceMotion.matches?450:1550);if(!valid(token))return;
-    mateProof=null;drawExplanation();
+    setFeedback('① まず、どの駒が王手を掛けた？',
+      '緑の矢印が黒王を攻撃する白の駒から伸びています。まずここに注目してください。','good');
+    cue('① CHECK','白の駒 → 黒Kingへ王手','key');
+    await wait(reduceMotion.matches?180:850);if(!valid(token))return;
+    mateProofStep='coverage';drawExplanation();
+    setFeedback('② そして、逃げる場所も応手もない',
+      '黒の合法応手は0手。白の利き「×」・黒の自駒「塞」で詰みの理由を確かめましょう。','good');
+    cue('② CHECKMATE','黒の合法応手 0 · 逃げ道もない','key');
+    await wait(reduceMotion.matches?450:2250);if(!valid(token))return;
+    mateProof=null;mateProofStep=null;drawExplanation();
     await shadowDefeat([active,...defeated.filter(b=>b.id!==active.id)],move,token);if(!valid(token))return;
     setPlaybackStage('hold');
     await wait(reduceMotion.matches?180:520);if(!valid(token))return;
@@ -812,7 +881,7 @@ async function openBranch(branch){
   saveProgress();renderUI();setPosition(postKeyFen);
   cue('SHADOW SELECTED','黒 …'+branch.san,'black');
   await wait(reduceMotion.matches?45:250);if(!valid(token))return;
-  const result=await transitionMove(postKeyFen,branch.move,{duration:640},token);
+  const result=await transitionMove(postKeyFen,branch.move,{duration:760},token);
   if(!result||!valid(token))return;
   await wait(reduceMotion.matches?70:250);if(!valid(token))return;
   phase='mate';hideCue();sound('black');
@@ -894,7 +963,7 @@ async function rewindBranch(token,{defeated=[]}={}){
     await wait(reduceMotion.matches?30:110);if(!valid(token))return;
   }
   await rewindMove(postKeyFen,branch.move,afterBlack,token);if(!valid(token))return;
-  phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
+  phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;mateProofStep=null;
   focusFrom=branch.from;
   hideCue();setPosition(postKeyFen);renderUI();
   const remaining=branches.filter(b=>b.from===branch.from&&!solved.has(b.id)).length;
@@ -960,7 +1029,7 @@ function hardReset(){
   cancelAnimations();cancelGesture();
   busy=false;gesture=null;selected=null;legal=[];hover=null;focusFrom=null;
   pauseFailureRewind();setPlaybackStage(null);
-  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
+  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;mateProofStep=null;
   wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
   proofPlaying=false;$('skipProof').hidden=true;
   phase='key';viewFen=initialFen;listOpen=false;
@@ -1158,7 +1227,7 @@ window.addEventListener('resize',()=>{
   if(phase==='explain')requestAnimationFrame(drawExplanation);
 });
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,audioOn,musicOn,soundStatus:soundscape.status(),mateProof:!!mateProof,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
+  state:()=>({phase,viewFen,audioOn,musicOn,soundStatus:soundscape.status(),motion:moveTrace,mateProof:!!mateProof,mateProofStep,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
   branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to,mates:b.mates.map(m=>m.from+m.to+(m.promotion||''))})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
