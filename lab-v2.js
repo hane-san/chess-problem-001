@@ -89,7 +89,7 @@ let explanation = null;
 let failureRewindTimer = null;
 let playbackStage = null;
 
-function setPlaybackStage(stage){playbackStage=stage;document.body.dataset.playback=stage||'';}
+function setPlaybackStage(stage){playbackStage=stage;document.body.dataset.playback=stage||'';if($('actionStatus'))renderUI();}
 function pauseFailureRewind(){
   clearTimeout(failureRewindTimer);failureRewindTimer=null;
   if(explanation){if(explanation.autoRewind)hideCue();explanation.autoRewind=false;}
