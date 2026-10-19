@@ -137,20 +137,16 @@ export class Soundscape {
     const parts=kind==='pad'?[[1,.54,'triangle'],[2,.21,'sine'],[3,.11,'sine']]:
       kind==='lead'?[[1,.66,'triangle'],[2,.18,'sine'],[3,.08,'sine']]:
       kind==='bass'?[[1,.72,'sine'],[2,.16,'triangle']]:[[1,.82,'sine'],[2,.19,'sine']];
-    for(const [harmonic,mix,type] of parts){
+    parts.forEach(([harmonic,mix,type],i)=>{
       const osc=ctx.createOscillator(),sub=ctx.createGain();
       osc.type=type;osc.frequency.setValueAtTime(base*harmonic,when);
       sub.gain.value=mix;
       osc.connect(sub);sub.connect(filter);osc.start(when);osc.stop(end+.03);
-      osc.onended=()=>{osc.disconnect();sub.disconnect();};
-    }
-    // Nodes are disconnected after their natural zero-volume release.
-    const last=ctx.createOscillator(); // Silent cleanup clock, not a sounding oscillator.
-    last.frequency.value=1;
-    const silence=ctx.createGain();silence.gain.value=0;
-    last.connect(silence);silence.connect(bus);
-    last.start(when);last.stop(end+.035);
-    last.onended=()=>{last.disconnect();silence.disconnect();filter.disconnect();gain.disconnect();};
+      osc.onended=()=>{
+        osc.disconnect();sub.disconnect();
+        if(i===parts.length-1){filter.disconnect();gain.disconnect();}
+      };
+    });
   }
   scheduleStep(step,time){
     const bar=Math.floor(step/8),index=step%8;
