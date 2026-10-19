@@ -54,7 +54,10 @@ export class Soundscape {
       const ctx=this.createContext();
       if(!ctx)return false;
       if(ctx.state!=='running')await ctx.resume();
-      if(this.musicOn)this.startScheduler();
+      if(this.musicOn){
+        if(this.musicBus && !document.hidden && this.musicBus.gain.value<.10)this.fade(this.musicBus.gain,.27,.55);
+        this.startScheduler();
+      }
       return ctx.state==='running';
     }catch{return false;}
   }
