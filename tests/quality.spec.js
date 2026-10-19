@@ -371,3 +371,35 @@ test('return action and phase banner distinguish replay from a stuck board and r
   expect((await app.state()).busy).toBe(false);
   await expect(page.locator('.move-sprite,.shatter-fragment')).toHaveCount(0);
 });
+
+
+test('sound-check proves a real WebAudio waveform, and music can start after a single iPhone gesture',async({page,app})=>{
+  await page.locator('#audioTestBtn').click();
+  await expect(page.locator('#audioStatus')).toContainText('確認音を再生しました');
+  await expect.poll(async()=>(await app.state()).soundStatus.ready,{timeout:8000}).toBe(true);
+  // The analyser sees sound at the output bus, not just a changed ON button.
+  await expect.poll(async()=>(await app.state()).soundStatus.signal,{timeout:3000,intervals:[30,60,100,150]}).toBeGreaterThan(.001);
+  await app.tap(page.locator('#musicBtn'));
+  await expect.poll(async()=>(await app.state()).soundStatus.scheduler,{timeout:6000}).toBe(true);
+  await expect.poll(async()=>(await app.state()).soundStatus.scheduled,{timeout:6000}).toBeGreaterThan(3);
+  await expect(page.locator('#audioStatus')).toContainText('BGM再生中');
+});
+
+test('move readability: a move traces its true source and destination and mate reveals checks then escapes',async({page,app})=>{
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(app.sq('g2'));await app.tap(app.sq('h2'));
+  await expect.poll(async()=>(await app.state()).motion?.from,{timeout:4000}).toBe('g2');
+  await expect(page.locator('#motionLines .motion-arrow')).toHaveCount(1);
+  await expect(page.locator('#motionMove')).toHaveText('g2 → h2');
+  await app.phase('explore',11000);
+  await open(page,app,'d3d2');
+  await expect(page.locator('#motionLines')).toHaveCount(1);
+  await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
+  await expect.poll(async()=>(await app.state()).mateProofStep,{timeout:11000}).toBe('check');
+  await expect(page.locator('#boardLegend')).toContainText('① 王手');
+  await expect.poll(async()=>(await app.state()).mateProofStep,{timeout:11000}).toBe('coverage');
+  await expect(page.locator('#boardLegend')).toContainText('② 逃げ道');
+  await app.phase('explore',18000);
+  await expect(page.locator('#motionLines .motion-arrow')).toHaveCount(0);
+  await expect(page.locator('#motionCaption')).toBeHidden();
+});
