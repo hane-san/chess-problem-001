@@ -81,6 +81,7 @@ let proofPlaying = false;
 let cueTimer = null;
 let keyboardSquare = 'g2';
 const animations = new Set();
+let mateProof = null;
 let persistenceAvailable = true;
 let explanation = null;
 let failureRewindTimer = null;
@@ -134,18 +135,63 @@ function cancelGesture(){
   gesture=null;hover=null;
 }
 function cancelAnimations(){for(const animation of animations)animation.cancel();animations.clear();}
+// Safari may suspend Web Animations without settling animation.finished.
+async function settleAnimation(animation,duration){
+  let watchdog;
+  try{
+    const deadline=new Promise(resolve=>{
+      watchdog=setTimeout(()=>resolve('timeout'),Math.max(150,Math.ceil(duration)+420));
+    });
+    const result=await Promise.race([
+      animation.finished.then(()=> 'finished',()=> 'cancelled'),
+      deadline
+    ]);
+    if(result==='timeout' && animation.playState!=='finished'){
+      try{animation.finish();}catch{try{animation.cancel();}catch{}}
+    }
+    return result;
+  }finally{clearTimeout(watchdog);}
+}
 function recoverOperation(error){
   console.error('Move operation failed',error);
   const returnPhase=explanation?.returnPhase||phase;
   ++sequence;cancelAnimations();cancelGesture();busy=false;proofPlaying=false;
   $('skipProof').hidden=true;hideCue();hideOverlay();
   pauseFailureRewind();explanation=null;setPlaybackStage(null);
-  completedMate=false;lastPlayedMate=null;
+  completedMate=false;lastPlayedMate=null;mateProof=null;
+  wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
   if(returnPhase==='key'){phase='key';viewFen=initialFen;active=null;}
   else if(active){phase='mate';viewFen=active.afterFen;}
   else{phase='explore';viewFen=postKeyFen;}
   selected=null;legal=[];paint();
   setFeedback('局面を戻しました','もう一度操作してください。検証済みの応手は保存されています。');
+  saveProgress();
+}
+// A backgrounded iPhone must never resume halfway through an obsolete animation.
+function settleInterruptedOperation(){
+  if(!busy)return;
+  ++sequence;cancelAnimations();cancelGesture();pauseFailureRewind();
+  busy=false;proofPlaying=false;mateProof=null;completedMate=false;lastPlayedMate=null;
+  wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
+  $('skipProof').hidden=true;hideCue();hideOverlay();explanation=null;setPlaybackStage(null);
+  if(phase==='victory'||phase==='review'){
+    const wasReview=phase==='review';
+    const keepFocus=wasReview||solved.size===branches.length?null:(active?.from||focusFrom);
+    phase=solved.size===branches.length?'complete':'explore';
+    active=null;focusFrom=keepFocus;viewFen=postKeyFen;
+  }else if(phase==='black'){
+    phase='explore';active=null;viewFen=postKeyFen;
+  }else if(phase==='explain'){
+    phase=active?'mate':'key';viewFen=active?active.afterFen:initialFen;
+  }else if(phase==='mate'){
+    viewFen=active?active.afterFen:postKeyFen;
+  }else if(phase==='key'){
+    viewFen=initialFen;
+  }else{
+    phase='explore';active=null;viewFen=postKeyFen;
+  }
+  selected=null;legal=[];hover=null;paint();
+  setFeedback('盤面を安全な局面へ復帰','中断したアニメーションを取り消しました。続きから操作できます。');
   saveProgress();
 }
 function run(action){Promise.resolve().then(action).catch(recoverOperation);}
@@ -241,7 +287,14 @@ function renderBoard(){
       const coord=document.createElement('span');
       coord.className='coord rank';coord.textContent=sq[1];el.append(coord);
     }
-    if(piece && piece.type==='k') el.classList.add('king-square');
+    if(piece && piece.type==='k'){
+      const identity=document.createElement('span');
+      identity.className='king-identity '+(piece.color==='w'?'white-king':'black-king');
+      identity.textContent=piece.color==='w'?'白王':'黒王';
+      identity.setAttribute('aria-hidden','true');
+      el.classList.add('king-square',piece.color==='w'?'king-white':'king-black');
+      el.append(identity);
+    }
     el.setAttribute('aria-label',sq+' '+(piece?(piece.color==='w'?'白':'黒')+NAME[piece.type]:'空きマス'));
     el.setAttribute('role','button');
     el.tabIndex=sq===keyboardSquare?0:-1;
@@ -307,15 +360,34 @@ function clearAnalysisMarks(){
 }
 function drawExplanation(){
   clearAnalysisMarks();
-  if(phase!=='explain'||!explanation||explanation.mode==='none')return;
-  const e=explanation,position=engine();
+  const showingMate=phase==='victory'&&mateProof;
+  board.classList.toggle('showing-mate-proof',!!showingMate);
+  wrap.classList.toggle('showing-mate-proof',!!showingMate);
+  if(!showingMate && (phase!=='explain'||!explanation||explanation.mode==='none'))return;
+  const e=showingMate?{mode:'mate-proof'}:explanation,position=engine();
   const arrows=[];
   const mark=(square,type,label)=>{
     const host=squareElement(square);if(!host)return;
     host.classList.add(type);
     if(label){const tag=document.createElement('span');tag.className='analysis-cell-mark';tag.textContent=label;host.append(tag);}
   };
-  if(e.mode==='response'){
+  if(e.mode==='mate-proof'){
+    const data=kingCoverage(position,'b');
+    mark(data.king,'analysis-king','詰');
+    for(const cell of data.cells){
+      if(cell.kind==='occupied')mark(cell.square,'analysis-blocked','塞');
+      else if(cell.kind==='controlled'){
+        mark(cell.square,'analysis-controlled','×');
+        for(const from of cell.attackers){
+          if(position.get(from))arrows.push({from,to:cell.square,color:'w',kind:'control',knight:position.get(from).type==='n'});
+        }
+      }else mark(cell.square,'analysis-escape','逃');
+    }
+    for(const from of data.checkers){
+      if(position.get(from))arrows.push({from,to:data.king,color:'w',kind:'check',knight:position.get(from).type==='n'});
+    }
+    $('boardLegend').textContent='CHECKMATE · 王手 '+data.checkers.length+' / 王の逃げ道 '+data.escapes.length+' / 黒の合法応手 0。緑の矢印は白の利き、「×」は押さえられたマス、「塞」は黒自身の駒です。';
+  }else if(e.mode==='response'){
     if(e.reply){arrows.push({from:e.reply.from,to:e.reply.to,color:'b',kind:'response',knight:e.reply.piece==='n'});mark(e.reply.from,'analysis-move-from');mark(e.reply.to,'analysis-move-to');}
     $('boardLegend').textContent='赤い矢印：黒の実際の応手';
   }else if(e.mode==='black'){
@@ -543,9 +615,9 @@ async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse
     if(capture && !reverse){
       await wait(ms*.7);
       if(valid(token)){burst(to,token);if(!quiet)sound('capture');}
-      await animation.finished.catch(()=>{});
+      await settleAnimation(animation,ms);
     }else{
-      await animation.finished.catch(()=>{});
+      await settleAnimation(animation,ms);
       if(valid(token)&&!quiet)sound('move');
     }
   }catch{
@@ -617,7 +689,19 @@ async function attemptWhite(move){
     phase='victory';saveProgress();renderUI();
     setFeedback(defeated.length>1?'同じ一手で'+defeated.length+'体を一括撃破 ✓':'シャドーを攻略 ✓',move.san+' で詰み。破壊の余韻のあと、駒を元の位置へ巻き戻します。','good');
     cue('CHECKMATE ✓',defeated.length>1?'同じ '+move.san+' で '+defeated.length+' 体を一括撃破':'このシャドーを攻略しました','key');sound('mate');
-    const king=kingSquare(new Chess(played),'b');squareElement(king)?.classList.add('mate-impact');
+    const king=kingSquare(new Chess(played),'b');
+    squareElement(king)?.classList.add('mate-impact');
+    // A real checkmate has no legal Black response; explain it rather than
+    // manufacturing an impossible King escape animation.
+    mateProof=true;
+    drawExplanation();
+    setPlaybackStage('mate-proof');
+    const coverage=kingCoverage(new Chess(played),'b');
+    setFeedback('CHECKMATE · 黒は一手も指せません',
+      '王手 '+coverage.checkers.length+'、黒王の合法な逃げ道 '+coverage.escapes.length+'。緑の矢印と「×」「塞」で詰みの理由を確認できます。','good');
+    cue('CHECKMATE','黒の合法応手 0 · 王手と逃げ道を確認','key');
+    await wait(reduceMotion.matches?450:1550);if(!valid(token))return;
+    mateProof=null;drawExplanation();
     await shadowDefeat([active,...defeated.filter(b=>b.id!==active.id)],move,token);if(!valid(token))return;
     setPlaybackStage('hold');
     await wait(reduceMotion.matches?180:520);if(!valid(token))return;
@@ -790,7 +874,7 @@ async function shadowDefeat(targets,winningMove,token){
 async function effectAnimation(element,keyframes,duration,token){
   if(reduceMotion.matches){await wait(90);return valid(token);}
   let animation;
-  try{animation=element.animate(keyframes,{duration,easing:'ease-out',fill:'forwards'});animations.add(animation);await animation.finished.catch(()=>{});}
+  try{animation=element.animate(keyframes,{duration,easing:'ease-out',fill:'forwards'});animations.add(animation);await settleAnimation(animation,duration);}
   catch{await wait(duration);}
   finally{if(animation)animations.delete(animation);}
   return valid(token);
@@ -804,7 +888,7 @@ async function rewindBranch(token,{defeated=[]}={}){
     await wait(reduceMotion.matches?30:110);if(!valid(token))return;
   }
   await rewindMove(postKeyFen,branch.move,afterBlack,token);if(!valid(token))return;
-  phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;
+  phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
   focusFrom=branch.from;
   hideCue();setPosition(postKeyFen);renderUI();
   const remaining=branches.filter(b=>b.from===branch.from&&!solved.has(b.id)).length;
@@ -870,7 +954,8 @@ function hardReset(){
   cancelAnimations();cancelGesture();
   busy=false;gesture=null;selected=null;legal=[];hover=null;focusFrom=null;
   pauseFailureRewind();setPlaybackStage(null);
-  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;
+  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
+  wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
   proofPlaying=false;$('skipProof').hidden=true;
   phase='key';viewFen=initialFen;listOpen=false;
   hideCue();hideOverlay();paint();
@@ -1026,7 +1111,7 @@ $('skipProof').addEventListener('click',()=>{
   if(!proofPlaying)return;
   ++sequence;cancelAnimations();cancelGesture();proofPlaying=false;busy=false;
   $('skipProof').hidden=true;
-  phase='complete';active=null;completedMate=false;lastPlayedMate=null;focusFrom=null;hideCue();
+  phase='complete';active=null;completedMate=false;lastPlayedMate=null;focusFrom=null;mateProof=null;hideCue();
   setPosition(postKeyFen);
   showOverlay('PROOF COMPLETE','黒の応手 '+branches.length+' 手すべてに詰みを確認','タップして応手を見直す →','complete');
   overlayAction=finishReview;
@@ -1039,13 +1124,14 @@ $('soundBtn').addEventListener('click',()=>{
   primeAudio();renderUI();savePreferences();
 });
 window.addEventListener('blur',()=>{cancelGesture();clearSelection();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();if(phase==='explain'){pauseFailureRewind();renderUI();}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();if(busy)settleInterruptedOperation();else if(phase==='explain'){pauseFailureRewind();renderUI();}}});
+window.addEventListener('pagehide',()=>{if(busy)settleInterruptedOperation();});
 window.addEventListener('resize',()=>{
   cancelGesture();clearSelection();
   if(phase==='explain')requestAnimationFrame(drawExplanation);
 });
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
+  state:()=>({phase,viewFen,mateProof:!!mateProof,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
   branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to,mates:b.mates.map(m=>m.from+m.to+(m.promotion||''))})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
