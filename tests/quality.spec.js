@@ -236,15 +236,26 @@ test('five matching shadows shatter together before a beat and rewind; progress 
 test('failure automatically breaks the unsuccessful move, pauses, then rewinds every demonstrated move exactly',async({page,app})=>{
   await key(page,app);await open(page,app,'d3d4');const before=(await app.state()).viewFen;
   await page.emulateMedia({reducedMotion:'no-preference'});
+  // Observe the short hold before the operation starts. Polling *after* the
+  // 6 fracture pieces appear can miss the entire short-lived beat on WebKit.
+  await page.evaluate(()=>{
+    window.__failureStages=[];
+    const snapshot=()=>{
+      const stage=document.body.dataset.playback;
+      const rook=document.querySelector('[data-square="b6"] > .piece.white');
+      window.__failureStages.push({stage,rook:rook?getComputedStyle(rook).visibility:null});
+    };
+    const observer=new MutationObserver(snapshot);
+    observer.observe(document.body,{attributes:true,attributeFilter:['data-playback']});
+    window.__stopFailureObserver=()=>observer.disconnect();
+  });
   await app.tap(app.sq('b5'));await app.tap(app.sq('b6'));await app.phase('explain');
   expect((await app.state()).explanation).toMatchObject({survival:'Kg3',autoRewind:true});
-  await expect(page.locator('.attempt-defeated .shatter-fragment')).toHaveCount(6);
-  const beat=await page.waitForFunction(()=>{
-    const s=window.__mateTwoDebug.state();if(s.playbackStage!=='hold')return false;
-    return {phase:s.phase,rook:getComputedStyle(document.querySelector('[data-square="b6"] > .piece.white')).visibility};
-  });
-  expect(await beat.jsonValue()).toEqual({phase:'explain',rook:'hidden'});
-  await app.phase('mate');expect((await app.state()).viewFen).toBe(before);
+  await app.phase('mate',25000);
+  const stages=await page.evaluate(()=>{window.__stopFailureObserver?.();return window.__failureStages;});
+  expect(stages.some(x=>x.stage==='shatter')).toBe(true);
+  expect(stages.some(x=>x.stage==='hold'&&x.rook==='hidden')).toBe(true);
+  expect((await app.state()).viewFen).toBe(before);
   await expect(page.locator('.move-sprite,.shatter-fragment,.analysis-arrow')).toHaveCount(0);
   await expect(page.locator('#solvedCount')).toHaveText('0 / 13');
 });
@@ -370,4 +381,36 @@ test('return action and phase banner distinguish replay from a stuck board and r
   await app.phase('explore');
   expect((await app.state()).busy).toBe(false);
   await expect(page.locator('.move-sprite,.shatter-fragment')).toHaveCount(0);
+});
+
+
+test('sound-check proves a real WebAudio waveform, and music can start after a single iPhone gesture',async({page,app})=>{
+  await page.locator('#audioTestBtn').click();
+  await expect(page.locator('#audioStatus')).toContainText('確認音を再生しました');
+  await expect.poll(async()=>(await app.state()).soundStatus.ready,{timeout:8000}).toBe(true);
+  // The analyser sees sound at the output bus, not just a changed ON button.
+  await expect.poll(async()=>(await app.state()).soundStatus.signal,{timeout:3000,intervals:[30,60,100,150]}).toBeGreaterThan(.001);
+  await app.tap(page.locator('#musicBtn'));
+  await expect.poll(async()=>(await app.state()).soundStatus.scheduler,{timeout:6000}).toBe(true);
+  await expect.poll(async()=>(await app.state()).soundStatus.scheduled,{timeout:6000}).toBeGreaterThan(3);
+  await expect(page.locator('#audioStatus')).toContainText('BGM再生中');
+});
+
+test('move readability: a move traces its true source and destination and mate reveals checks then escapes',async({page,app})=>{
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(app.sq('g2'));await app.tap(app.sq('h2'));
+  await expect.poll(async()=>(await app.state()).motion?.from,{timeout:4000}).toBe('g2');
+  await expect(page.locator('#motionLines .motion-arrow')).toHaveCount(1);
+  await expect(page.locator('#motionMove')).toHaveText('g2 → h2');
+  await app.phase('explore',11000);
+  await open(page,app,'d3d2');
+  await expect(page.locator('#motionLines')).toHaveCount(1);
+  await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
+  await expect.poll(async()=>(await app.state()).mateProofStep,{timeout:11000}).toBe('check');
+  await expect(page.locator('#boardLegend')).toContainText('① 王手');
+  await expect.poll(async()=>(await app.state()).mateProofStep,{timeout:11000}).toBe('coverage');
+  await expect(page.locator('#boardLegend')).toContainText('② 逃げ道');
+  await app.phase('explore',18000);
+  await expect(page.locator('#motionLines .motion-arrow')).toHaveCount(0);
+  await expect(page.locator('#motionCaption')).toBeHidden();
 });

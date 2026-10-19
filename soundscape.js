@@ -32,34 +32,64 @@ export class Soundscape {
     this.musicOn=false;this.effectsOn=true;this.musicTimer=null;this.nextTime=0;this.step=0;
     this.tempo=112;this.stepSeconds=60/this.tempo/2;this.noiseBuffer=null;
     this.voices=new Set();this.visibilityHandler=()=>this.handleVisibility();
+    this.problem=null;this.audioState='not-started';this.analyser=null;this.scheduled=0;this.lastSignal=0;
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',this.visibilityHandler);
   }
   createContext(){
     if(this.context)return this.context;
     const Audio=window.AudioContext||window.webkitAudioContext;
     if(!Audio)return null;
-    const ctx=new Audio({latencyHint:'interactive'});
+    let ctx;
+    try{ctx=new Audio({latencyHint:'interactive'});}
+    catch{ctx=new Audio();} // iOS WKWebView versions may reject optional constructor hints.
     const compressor=ctx.createDynamicsCompressor();
     compressor.threshold.value=-13;compressor.knee.value=12;
     compressor.ratio.value=3;compressor.attack.value=.006;compressor.release.value=.24;
-    const master=ctx.createGain();master.gain.value=.78;
+    const master=ctx.createGain();master.gain.value=.94;
     const music=ctx.createGain();music.gain.value=0;
-    const effects=ctx.createGain();effects.gain.value=this.effectsOn?.62:0;
-    music.connect(master);effects.connect(master);master.connect(compressor);compressor.connect(ctx.destination);
-    this.context=ctx;this.master=master;this.musicBus=music;this.effectsBus=effects;
+    const effects=ctx.createGain();effects.gain.value=this.effectsOn?.86:0;
+    const analyser=ctx.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.55;
+    music.connect(master);effects.connect(master);master.connect(compressor);compressor.connect(analyser);analyser.connect(ctx.destination);
+    this.context=ctx;this.master=master;this.musicBus=music;this.effectsBus=effects;this.analyser=analyser;
+    this.audioState=ctx.state;
+    ctx.addEventListener?.('statechange',()=>{this.audioState=ctx.state;this.notify();});
+    this.notify();
     return ctx;
+  }
+  notify(){
+    if(typeof window!=='undefined'&&typeof window.CustomEvent==='function')
+      window.dispatchEvent(new CustomEvent('mate-two:audio-state'));
   }
   async unlock(){
     try{
       const ctx=this.createContext();
-      if(!ctx)return false;
-      if(ctx.state!=='running')await ctx.resume();
+      if(!ctx){this.problem='このブラウザはWeb Audio非対応です';this.notify();return false;}
+      if(ctx.state!=='running'){
+        // Warm up the iOS audio route synchronously inside the user's tap event.
+        const silent=ctx.createBufferSource();
+        silent.buffer=ctx.createBuffer(1,1,ctx.sampleRate);
+        const gain=ctx.createGain();gain.gain.value=0;
+        silent.connect(gain);gain.connect(ctx.destination);
+        silent.start(0);
+        silent.onended=()=>{silent.disconnect();gain.disconnect();};
+        const resume=ctx.resume().catch(error=>{this.problem=error?.message||'音声の開始に失敗しました';});
+        await Promise.race([resume,new Promise(resolve=>setTimeout(resolve,750))]);
+      }
+      this.audioState=ctx.state;
+      if(ctx.state!=='running'){
+        this.problem='音声が一時停止中です。♫ または「音を試す」をタップしてください';
+        this.notify();return false;
+      }
+      this.problem=null;
       if(this.musicOn){
-        if(this.musicBus && !document.hidden && this.musicBus.gain.value<.10)this.fade(this.musicBus.gain,.27,.55);
+        this.fade(this.musicBus.gain,.52,.55);
         this.startScheduler();
       }
-      return ctx.state==='running';
-    }catch{return false;}
+      this.notify();return true;
+    }catch(error){
+      this.problem=error?.message||'AudioContextを開始できませんでした';
+      this.notify();return false;
+    }
   }
   fade(param,to,seconds=.16){
     if(!this.context)return;
@@ -76,14 +106,14 @@ export class Soundscape {
     }else{
       this.unlock().then(ok=>{
         if(!ok||!this.musicOn||document.hidden)return;
-        this.fade(this.musicBus.gain,.27,.65);
+        this.fade(this.musicBus.gain,.52,.55);
         this.startScheduler();
       });
     }
   }
   setEffects(on){
     this.effectsOn=!!on;
-    if(this.effectsBus)this.fade(this.effectsBus.gain,this.effectsOn?.62:0,.11);
+    if(this.effectsBus)this.fade(this.effectsBus.gain,this.effectsOn?.86:0,.11);
     if(on)this.unlock();
   }
   handleVisibility(){
@@ -93,7 +123,7 @@ export class Soundscape {
     }else if(this.musicOn){
       this.unlock().then(ok=>{
         if(!ok||!this.musicOn||document.hidden)return;
-        this.fade(this.musicBus.gain,.27,.4);
+        this.fade(this.musicBus.gain,.52,.40);
         this.startScheduler();
       });
     }
@@ -105,7 +135,7 @@ export class Soundscape {
   startScheduler(){
     if(!this.context||this.context.state!=='running'||!this.musicOn||document.hidden)return;
     if(this.musicTimer!==null)return;
-    this.nextTime=this.context.currentTime+.08;
+    this.nextTime=this.context.currentTime+.085;
     this.musicTimer=setInterval(()=>this.scheduleAhead(),65);
     this.scheduleAhead();
   }
@@ -117,6 +147,7 @@ export class Soundscape {
     const horizon=ctx.currentTime+.35;
     while(this.nextTime<horizon){
       this.scheduleStep(this.step,this.nextTime);
+      this.scheduled+=1;
       this.step=(this.step+1)%(16*8);
       this.nextTime+=this.stepSeconds;
     }
@@ -161,9 +192,9 @@ export class Soundscape {
     }
     if(index===4)this.note(barNote-12,time,eighth*2.8,.068,'bass');
     const arp=[chord[1],chord[2],chord[3],chord[2],chord[4],chord[3],chord[2],chord[1]];
-    this.note(arp[index]+12,time,eighth*.7,.022,'pluck');
+    this.note(arp[index]+12,time,eighth*.7,.032,'pluck');
     for(const [at,pitch,steps] of MELODY[bar]){
-      if(at===index)this.note(pitch,time,eighth*steps*.84,.11,'lead');
+      if(at===index)this.note(pitch,time,eighth*steps*.84,.155,'lead');
     }
     if(index===0||index===4)this.note(barNote-24,time,.11,.04,'bass');
   }
@@ -211,5 +242,32 @@ export class Soundscape {
     source.start(when);source.stop(when+duration+.015);
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }
-  status(){return {musicOn:this.musicOn,effectsOn:this.effectsOn,ready:!!this.context&&this.context.state==='running',scheduler:this.musicTimer!==null};}
+  async testSound(){
+    const ready=await this.unlock();
+    if(!ready)return false;
+    // The test requires an explicit tap; it never changes music preferences.
+    const before=this.effectsOn;this.effectsOn=true;
+    // Explicit test must be audible even if the user has muted regular SFX.
+    if(this.effectsBus)this.fade(this.effectsBus.gain,.9,.035);
+    this.effect('key');
+    setTimeout(()=>{this.effect('capture');this.effectsOn=before;
+      if(this.effectsBus)this.fade(this.effectsBus.gain,before?.86:0,.35);
+    },300);
+    return true;
+  }
+  status(){
+    let signal=0;
+    if(this.analyser&&this.context?.state==='running'){
+      try{
+        const samples=new Uint8Array(this.analyser.fftSize);
+        this.analyser.getByteTimeDomainData(samples);
+        for(const sample of samples)signal=Math.max(signal,Math.abs(sample-128)/128);
+      }catch{}
+    }
+    this.lastSignal=Math.max(this.lastSignal*.75,signal);
+    return {musicOn:this.musicOn,effectsOn:this.effectsOn,
+      ready:!!this.context&&this.context.state==='running',audioState:this.context?.state||'not-started',
+      scheduler:this.musicTimer!==null,scheduled:this.scheduled,signal:Math.round(this.lastSignal*1000)/1000,
+      problem:this.problem};
+  }
 }
