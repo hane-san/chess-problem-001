@@ -573,6 +573,12 @@ function renderUI(){
   $('musicBtn').setAttribute('aria-pressed',String(musicOn));
   $('musicBtn').setAttribute('aria-label','BGM '+(musicOn?'オン':'オフ'));
   $('musicBtn').querySelector('span').textContent=musicOn?'BGM ON':'BGM OFF';
+  const audio=soundscape.status(),audioStatus=$('audioStatus');
+  audioStatus.dataset.state=audio.problem?'error':audio.ready?'active':'idle';
+  audioStatus.textContent=audio.problem?'♫ '+audio.problem
+    :audio.ready?(musicOn?(audio.scheduler?'♫ BGM再生中 · 効果音 '+(audioOn?'ON':'OFF'):'♫ BGM再生準備中'):'♫ 効果音 '+(audioOn?'ON':'OFF')+' · BGM OFF')
+    :musicOn?'♫ BGM待機中 · 「音を試す」をタップしてください'
+    :'♫ BGM初期OFF · 音が聞こえない場合は「音を試す」';
   const returning=busy||['black','mate','explain','victory','review','complete'].includes(phase)||(phase==='explore'&&!!focusFrom);
   $('returnBtn').hidden=!returning;
   const status=busy
@@ -603,6 +609,7 @@ function renderUI(){
   const locked=busy||!overlay.hidden;
   $('hintToggle').disabled=locked;showBranchesBtn.disabled=locked;
   $('strategyBtn').hidden=phase==='explain';$('strategyBtn').disabled=locked;
+  $('audioTestBtn').disabled=false;
   $('revealBtn').hidden=phase==='explain';$('revealBtn').disabled=locked;
   $('revealBtn').textContent=phase==='key'?'初手を見る ↗':phase==='mate'?'詰みを見る ↗':solved.size===total?'全手順を再生 ↗':'次のシャドーへ ↗';
   if(locked)board.querySelectorAll('button.ghost-target').forEach(el=>{el.disabled=true;});
@@ -1204,6 +1211,17 @@ $('musicBtn').addEventListener('click',()=>{
   soundscape.setMusic(musicOn);
   renderUI();savePreferences();
 });
+$('audioTestBtn').addEventListener('click',async()=>{
+  // This direct user gesture is necessary for reliable audio activation on iOS.
+  const ready=await soundscape.testSound();
+  renderUI();
+  if(ready){
+    $('audioStatus').textContent='♫ 確認音を再生しました。聞こえない場合は端末の音量・消音・出力先をご確認ください。';
+  }else{
+    $('audioStatus').textContent='♫ 音声を開始できません。画面をタップしてからもう一度試すか、ブラウザの音声設定をご確認ください。';
+  }
+});
+window.addEventListener('mate-two:audio-state',()=>{if($('musicBtn'))renderUI();});
 $('returnBtn').addEventListener('click',()=>{
   if(busy){
     if(proofPlaying){$('skipProof').click();return;}
