@@ -159,6 +159,7 @@ function recoverOperation(error){
   $('skipProof').hidden=true;hideCue();hideOverlay();
   pauseFailureRewind();explanation=null;setPlaybackStage(null);
   completedMate=false;lastPlayedMate=null;mateProof=null;
+  wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
   if(returnPhase==='key'){phase='key';viewFen=initialFen;active=null;}
   else if(active){phase='mate';viewFen=active.afterFen;}
   else{phase='explore';viewFen=postKeyFen;}
@@ -171,10 +172,13 @@ function settleInterruptedOperation(){
   if(!busy)return;
   ++sequence;cancelAnimations();cancelGesture();pauseFailureRewind();
   busy=false;proofPlaying=false;mateProof=null;completedMate=false;lastPlayedMate=null;
+  wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
   $('skipProof').hidden=true;hideCue();hideOverlay();explanation=null;setPlaybackStage(null);
   if(phase==='victory'||phase==='review'){
+    const wasReview=phase==='review';
+    const keepFocus=wasReview||solved.size===branches.length?null:(active?.from||focusFrom);
     phase=solved.size===branches.length?'complete':'explore';
-    active=null;focusFrom=null;viewFen=postKeyFen;
+    active=null;focusFrom=keepFocus;viewFen=postKeyFen;
   }else if(phase==='black'){
     phase='explore';active=null;viewFen=postKeyFen;
   }else if(phase==='explain'){
@@ -358,6 +362,7 @@ function drawExplanation(){
   clearAnalysisMarks();
   const showingMate=phase==='victory'&&mateProof;
   board.classList.toggle('showing-mate-proof',!!showingMate);
+  wrap.classList.toggle('showing-mate-proof',!!showingMate);
   if(!showingMate && (phase!=='explain'||!explanation||explanation.mode==='none'))return;
   const e=showingMate?{mode:'mate-proof'}:explanation,position=engine();
   const arrows=[];
@@ -950,6 +955,7 @@ function hardReset(){
   busy=false;gesture=null;selected=null;legal=[];hover=null;focusFrom=null;
   pauseFailureRewind();setPlaybackStage(null);
   solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
+  wrap.classList.remove('showing-mate-proof');board.classList.remove('showing-mate-proof');
   proofPlaying=false;$('skipProof').hidden=true;
   phase='key';viewFen=initialFen;listOpen=false;
   hideCue();hideOverlay();paint();
