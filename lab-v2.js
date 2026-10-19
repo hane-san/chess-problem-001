@@ -166,6 +166,30 @@ function recoverOperation(error){
   setFeedback('局面を戻しました','もう一度操作してください。検証済みの応手は保存されています。');
   saveProgress();
 }
+// A backgrounded iPhone must never resume halfway through an obsolete animation.
+function settleInterruptedOperation(){
+  if(!busy)return;
+  ++sequence;cancelAnimations();cancelGesture();pauseFailureRewind();
+  busy=false;proofPlaying=false;mateProof=null;completedMate=false;lastPlayedMate=null;
+  $('skipProof').hidden=true;hideCue();hideOverlay();explanation=null;setPlaybackStage(null);
+  if(phase==='victory'||phase==='review'){
+    phase=solved.size===branches.length?'complete':'explore';
+    active=null;focusFrom=null;viewFen=postKeyFen;
+  }else if(phase==='black'){
+    phase='explore';active=null;viewFen=postKeyFen;
+  }else if(phase==='explain'){
+    phase=active?'mate':'key';viewFen=active?active.afterFen:initialFen;
+  }else if(phase==='mate'){
+    viewFen=active?active.afterFen:postKeyFen;
+  }else if(phase==='key'){
+    viewFen=initialFen;
+  }else{
+    phase='explore';active=null;viewFen=postKeyFen;
+  }
+  selected=null;legal=[];hover=null;paint();
+  setFeedback('盤面を安全な局面へ復帰','中断したアニメーションを取り消しました。続きから操作できます。');
+  saveProgress();
+}
 function run(action){Promise.resolve().then(action).catch(recoverOperation);}
 
 function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
@@ -1094,7 +1118,8 @@ $('soundBtn').addEventListener('click',()=>{
   primeAudio();renderUI();savePreferences();
 });
 window.addEventListener('blur',()=>{cancelGesture();clearSelection();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();if(phase==='explain'){pauseFailureRewind();renderUI();}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelGesture();clearSelection();if(busy)settleInterruptedOperation();else if(phase==='explain'){pauseFailureRewind();renderUI();}}});
+window.addEventListener('pagehide',()=>{if(busy)settleInterruptedOperation();});
 window.addEventListener('resize',()=>{
   cancelGesture();clearSelection();
   if(phase==='explain')requestAnimationFrame(drawExplanation);
