@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>MATE / TWO — Chess Problem Lab</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=20261018-shadow2">
+  <link rel="stylesheet" href="styles.css?v=20261019-mateproof1">
 </head>
 <body>
   <a class="skip-link" href="#board">盤面へ移動</a>
@@ -118,7 +118,7 @@
   <div id="startupError" class="startup-error" role="alert" hidden><strong>盤面を読み込めませんでした</strong><p>ページを再読み込みしてください。進み具合はこの端末に保存されています。</p><button type="button" onclick="location.reload()">再読み込み</button></div>
   <noscript><p class="noscript">このアプリを使うにはJavaScriptを有効にしてください。</p></noscript>
   <script type="module">
-    import('./lab-v2.js?v=20261018-shadow2').catch(() => {
+    import('./lab-v2.js?v=20261019-mateproof1').catch(() => {
       document.getElementById('startupError').hidden = false;
     });
   </script>
