@@ -247,8 +247,12 @@ export class Soundscape {
     if(!ready)return false;
     // The test requires an explicit tap; it never changes music preferences.
     const before=this.effectsOn;this.effectsOn=true;
-    this.effect('key');this.effect('capture');
-    this.effectsOn=before;
+    // Explicit test must be audible even if the user has muted regular SFX.
+    if(this.effectsBus)this.fade(this.effectsBus.gain,.9,.035);
+    this.effect('key');
+    setTimeout(()=>{this.effect('capture');this.effectsOn=before;
+      if(this.effectsBus)this.fade(this.effectsBus.gain,before?.86:0,.35);
+    },300);
     return true;
   }
   status(){
