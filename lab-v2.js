@@ -81,6 +81,7 @@ let proofPlaying = false;
 let cueTimer = null;
 let keyboardSquare = 'g2';
 const animations = new Set();
+let mateProof = null;
 let persistenceAvailable = true;
 let explanation = null;
 let failureRewindTimer = null;
@@ -134,13 +135,30 @@ function cancelGesture(){
   gesture=null;hover=null;
 }
 function cancelAnimations(){for(const animation of animations)animation.cancel();animations.clear();}
+// Safari may suspend Web Animations without settling animation.finished.
+async function settleAnimation(animation,duration){
+  let watchdog;
+  try{
+    const deadline=new Promise(resolve=>{
+      watchdog=setTimeout(()=>resolve('timeout'),Math.max(150,Math.ceil(duration)+420));
+    });
+    const result=await Promise.race([
+      animation.finished.then(()=> 'finished',()=> 'cancelled'),
+      deadline
+    ]);
+    if(result==='timeout' && animation.playState!=='finished'){
+      try{animation.finish();}catch{try{animation.cancel();}catch{}}
+    }
+    return result;
+  }finally{clearTimeout(watchdog);}
+}
 function recoverOperation(error){
   console.error('Move operation failed',error);
   const returnPhase=explanation?.returnPhase||phase;
   ++sequence;cancelAnimations();cancelGesture();busy=false;proofPlaying=false;
   $('skipProof').hidden=true;hideCue();hideOverlay();
   pauseFailureRewind();explanation=null;setPlaybackStage(null);
-  completedMate=false;lastPlayedMate=null;
+  completedMate=false;lastPlayedMate=null;mateProof=null;
   if(returnPhase==='key'){phase='key';viewFen=initialFen;active=null;}
   else if(active){phase='mate';viewFen=active.afterFen;}
   else{phase='explore';viewFen=postKeyFen;}
@@ -241,7 +259,14 @@ function renderBoard(){
       const coord=document.createElement('span');
       coord.className='coord rank';coord.textContent=sq[1];el.append(coord);
     }
-    if(piece && piece.type==='k') el.classList.add('king-square');
+    if(piece && piece.type==='k'){
+      const identity=document.createElement('span');
+      identity.className='king-identity '+(piece.color==='w'?'white-king':'black-king');
+      identity.textContent=piece.color==='w'?'白王':'黒王';
+      identity.setAttribute('aria-hidden','true');
+      el.classList.add('king-square',piece.color==='w'?'king-white':'king-black');
+      el.append(identity);
+    }
     el.setAttribute('aria-label',sq+' '+(piece?(piece.color==='w'?'白':'黒')+NAME[piece.type]:'空きマス'));
     el.setAttribute('role','button');
     el.tabIndex=sq===keyboardSquare?0:-1;
@@ -543,9 +568,9 @@ async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse
     if(capture && !reverse){
       await wait(ms*.7);
       if(valid(token)){burst(to,token);if(!quiet)sound('capture');}
-      await animation.finished.catch(()=>{});
+      await settleAnimation(animation,ms);
     }else{
-      await animation.finished.catch(()=>{});
+      await settleAnimation(animation,ms);
       if(valid(token)&&!quiet)sound('move');
     }
   }catch{
@@ -790,7 +815,7 @@ async function shadowDefeat(targets,winningMove,token){
 async function effectAnimation(element,keyframes,duration,token){
   if(reduceMotion.matches){await wait(90);return valid(token);}
   let animation;
-  try{animation=element.animate(keyframes,{duration,easing:'ease-out',fill:'forwards'});animations.add(animation);await animation.finished.catch(()=>{});}
+  try{animation=element.animate(keyframes,{duration,easing:'ease-out',fill:'forwards'});animations.add(animation);await settleAnimation(animation,duration);}
   catch{await wait(duration);}
   finally{if(animation)animations.delete(animation);}
   return valid(token);
@@ -804,7 +829,7 @@ async function rewindBranch(token,{defeated=[]}={}){
     await wait(reduceMotion.matches?30:110);if(!valid(token))return;
   }
   await rewindMove(postKeyFen,branch.move,afterBlack,token);if(!valid(token))return;
-  phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;
+  phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
   focusFrom=branch.from;
   hideCue();setPosition(postKeyFen);renderUI();
   const remaining=branches.filter(b=>b.from===branch.from&&!solved.has(b.id)).length;
@@ -870,7 +895,7 @@ function hardReset(){
   cancelAnimations();cancelGesture();
   busy=false;gesture=null;selected=null;legal=[];hover=null;focusFrom=null;
   pauseFailureRewind();setPlaybackStage(null);
-  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;
+  solved.clear();active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;
   proofPlaying=false;$('skipProof').hidden=true;
   phase='key';viewFen=initialFen;listOpen=false;
   hideCue();hideOverlay();paint();
@@ -1026,7 +1051,7 @@ $('skipProof').addEventListener('click',()=>{
   if(!proofPlaying)return;
   ++sequence;cancelAnimations();cancelGesture();proofPlaying=false;busy=false;
   $('skipProof').hidden=true;
-  phase='complete';active=null;completedMate=false;lastPlayedMate=null;focusFrom=null;hideCue();
+  phase='complete';active=null;completedMate=false;lastPlayedMate=null;focusFrom=null;mateProof=null;hideCue();
   setPosition(postKeyFen);
   showOverlay('PROOF COMPLETE','黒の応手 '+branches.length+' 手すべてに詰みを確認','タップして応手を見直す →','complete');
   overlayAction=finishReview;
@@ -1045,7 +1070,7 @@ window.addEventListener('resize',()=>{
   if(phase==='explain')requestAnimationFrame(drawExplanation);
 });
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
+  state:()=>({phase,viewFen,mateProof:!!mateProof,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
   branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to,mates:b.mates.map(m=>m.from+m.to+(m.promotion||''))})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
