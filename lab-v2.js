@@ -332,15 +332,33 @@ function clearAnalysisMarks(){
 }
 function drawExplanation(){
   clearAnalysisMarks();
-  if(phase!=='explain'||!explanation||explanation.mode==='none')return;
-  const e=explanation,position=engine();
+  const showingMate=phase==='victory'&&mateProof;
+  board.classList.toggle('showing-mate-proof',!!showingMate);
+  if(!showingMate && (phase!=='explain'||!explanation||explanation.mode==='none'))return;
+  const e=showingMate?{mode:'mate-proof'}:explanation,position=engine();
   const arrows=[];
   const mark=(square,type,label)=>{
     const host=squareElement(square);if(!host)return;
     host.classList.add(type);
     if(label){const tag=document.createElement('span');tag.className='analysis-cell-mark';tag.textContent=label;host.append(tag);}
   };
-  if(e.mode==='response'){
+  if(e.mode==='mate-proof'){
+    const data=kingCoverage(position,'b');
+    mark(data.king,'analysis-king','詰');
+    for(const cell of data.cells){
+      if(cell.kind==='occupied')mark(cell.square,'analysis-blocked','塞');
+      else if(cell.kind==='controlled'){
+        mark(cell.square,'analysis-controlled','×');
+        for(const from of cell.attackers){
+          if(position.get(from))arrows.push({from,to:cell.square,color:'w',kind:'control',knight:position.get(from).type==='n'});
+        }
+      }else mark(cell.square,'analysis-escape','逃');
+    }
+    for(const from of data.checkers){
+      if(position.get(from))arrows.push({from,to:data.king,color:'w',kind:'check',knight:position.get(from).type==='n'});
+    }
+    $('boardLegend').textContent='CHECKMATE · 王手 '+data.checkers.length+' / 王の逃げ道 '+data.escapes.length+' / 黒の合法応手 0。緑の矢印は白の利き、「×」は押さえられたマス、「塞」は黒自身の駒です。';
+  }else if(e.mode==='response'){
     if(e.reply){arrows.push({from:e.reply.from,to:e.reply.to,color:'b',kind:'response',knight:e.reply.piece==='n'});mark(e.reply.from,'analysis-move-from');mark(e.reply.to,'analysis-move-to');}
     $('boardLegend').textContent='赤い矢印：黒の実際の応手';
   }else if(e.mode==='black'){
@@ -642,7 +660,19 @@ async function attemptWhite(move){
     phase='victory';saveProgress();renderUI();
     setFeedback(defeated.length>1?'同じ一手で'+defeated.length+'体を一括撃破 ✓':'シャドーを攻略 ✓',move.san+' で詰み。破壊の余韻のあと、駒を元の位置へ巻き戻します。','good');
     cue('CHECKMATE ✓',defeated.length>1?'同じ '+move.san+' で '+defeated.length+' 体を一括撃破':'このシャドーを攻略しました','key');sound('mate');
-    const king=kingSquare(new Chess(played),'b');squareElement(king)?.classList.add('mate-impact');
+    const king=kingSquare(new Chess(played),'b');
+    squareElement(king)?.classList.add('mate-impact');
+    // A real checkmate has no legal Black response; explain it rather than
+    // manufacturing an impossible King escape animation.
+    mateProof=true;
+    drawExplanation();
+    setPlaybackStage('mate-proof');
+    const coverage=kingCoverage(new Chess(played),'b');
+    setFeedback('CHECKMATE · 黒は一手も指せません',
+      '王手 '+coverage.checkers.length+'、黒王の合法な逃げ道 '+coverage.escapes.length+'。緑の矢印と「×」「塞」で詰みの理由を確認できます。','good');
+    cue('CHECKMATE','黒の合法応手 0 · 王手と逃げ道を確認','key');
+    await wait(reduceMotion.matches?450:1550);if(!valid(token))return;
+    mateProof=null;drawExplanation();
     await shadowDefeat([active,...defeated.filter(b=>b.id!==active.id)],move,token);if(!valid(token))return;
     setPlaybackStage('hold');
     await wait(reduceMotion.matches?180:520);if(!valid(token))return;
