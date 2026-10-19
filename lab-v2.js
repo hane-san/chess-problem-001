@@ -77,6 +77,7 @@ let listOpen = false;
 let orientation = 'white';
 let audioOn = true;
 let musicOn = false;
+let audioTestMessage=null;
 const soundscape = new Soundscape();
 let overlayAction = null;
 let proofPlaying = false;
@@ -575,10 +576,10 @@ function renderUI(){
   $('musicBtn').querySelector('span').textContent=musicOn?'BGM ON':'BGM OFF';
   const audio=soundscape.status(),audioStatus=$('audioStatus');
   audioStatus.dataset.state=audio.problem?'error':audio.ready?'active':'idle';
-  audioStatus.textContent=audio.problem?'♫ '+audio.problem
+  audioStatus.textContent=audioTestMessage|| (audio.problem?'♫ '+audio.problem
     :audio.ready?(musicOn?(audio.scheduler?'♫ BGM再生中 · 効果音 '+(audioOn?'ON':'OFF'):'♫ BGM再生準備中'):'♫ 効果音 '+(audioOn?'ON':'OFF')+' · BGM OFF')
     :musicOn?'♫ BGM待機中 · 「音を試す」をタップしてください'
-    :'♫ BGM初期OFF · 音が聞こえない場合は「音を試す」';
+    :'♫ BGM初期OFF · 音が聞こえない場合は「音を試す」');
   const returning=busy||['black','mate','explain','victory','review','complete'].includes(phase)||(phase==='explore'&&!!focusFrom);
   $('returnBtn').hidden=!returning;
   const status=busy
@@ -1207,19 +1208,15 @@ $('soundBtn').addEventListener('click',()=>{
   renderUI();savePreferences();
 });
 $('musicBtn').addEventListener('click',()=>{
-  musicOn=!musicOn;
+  musicOn=!musicOn;audioTestMessage=null;
   soundscape.setMusic(musicOn);
   renderUI();savePreferences();
 });
 $('audioTestBtn').addEventListener('click',async()=>{
   // This direct user gesture is necessary for reliable audio activation on iOS.
   const ready=await soundscape.testSound();
+  audioTestMessage=ready?'♫ 確認音を再生しました。聞こえない場合は端末の音量・消音・出力先をご確認ください。':'♫ 音声を開始できません。画面をタップしてからもう一度試すか、ブラウザの音声設定をご確認ください。';
   renderUI();
-  if(ready){
-    $('audioStatus').textContent='♫ 確認音を再生しました。聞こえない場合は端末の音量・消音・出力先をご確認ください。';
-  }else{
-    $('audioStatus').textContent='♫ 音声を開始できません。画面をタップしてからもう一度試すか、ブラウザの音声設定をご確認ください。';
-  }
 });
 window.addEventListener('mate-two:audio-state',()=>{if($('musicBtn'))renderUI();});
 $('returnBtn').addEventListener('click',()=>{
