@@ -66,6 +66,7 @@ test('shadow choice has no arrows; selected black piece materializes with only f
 });
 
 test('all 13 defences auto-rewind, clear exactly matching shadows, restore captures and leave a clean completed board',async({page,app})=>{
+  test.setTimeout(100_000); // 13 distinct mate explanations take longer in mobile WebKit.
   const board=await page.locator('#board').boundingBox();await key(page,app);
   const branches=await page.evaluate(()=>window.__mateTwoDebug.branches());expect(branches).toHaveLength(13);
   const cleared=new Set();
@@ -286,11 +287,21 @@ test('White and Black kings are unmistakable throughout play; checkmate visibly 
   await expect(app.sq('h2').locator('.king-identity')).toHaveText('白王');
   await open(page,app,'d3d2');
   await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
-  await expect.poll(async()=>(await app.state()).mateProof,{timeout:8000}).toBe(true);
-  await expect(page.locator('#boardLegend')).toContainText('黒の合法応手 0');
-  await expect(page.locator('.showing-mate-proof .analysis-arrow.check')).not.toHaveCount(0);
-  await expect(page.locator('.analysis-escape')).toHaveCount(0);
-  await expect(app.sq('c4').locator('.king-identity')).toHaveText('黒王');
+  // Capture the short-lived real mate diagram atomically; the game
+  // intentionally proceeds to the shatter animation after its reading beat.
+  const proof=await page.waitForFunction(()=>{
+    const s=window.__mateTwoDebug?.state();
+    if(!s?.mateProof)return false;
+    const legend=document.querySelector('#boardLegend')?.textContent||'';
+    const checks=document.querySelectorAll('.showing-mate-proof .analysis-arrow.check').length;
+    if(!checks || !legend.includes('黒の合法応手 0'))return false;
+    return {legend,checks,escapes:document.querySelectorAll('.analysis-escape').length,
+      king:document.querySelector('[data-square="c4"] .king-identity')?.textContent};
+  },null,{timeout:8000});
+  const diagram=await proof.jsonValue();
+  expect(diagram.checks).toBeGreaterThan(0);
+  expect(diagram.escapes).toBe(0);
+  expect(diagram.king).toBe('黒王');
   await app.phase('explore',15000);
   await expect(page.locator('.analysis-arrow')).toHaveCount(0);
   await expect(page.locator('.king-identity')).toHaveCount(2);
