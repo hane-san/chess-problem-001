@@ -414,3 +414,57 @@ test('move readability: a move traces its true source and destination and mate r
   await expect(page.locator('#motionLines .motion-arrow')).toHaveCount(0);
   await expect(page.locator('#motionCaption')).toBeHidden();
 });
+
+test('drag follows the pointer, hands off at release and cancels cleanly while stable squares retain focus',async({page,app})=>{
+  await page.evaluate(()=>{window.flowSquares=[...document.querySelectorAll('.square')];window.steadyPiece=document.querySelector('[data-square="f6"] > .piece');});
+  const from=await app.sq('g2').boundingBox(),to=await app.sq('h2').boundingBox();
+  const a={x:from.x+from.width/2,y:from.y+from.height/2},z={x:to.x+to.width/2,y:to.y+to.height/2};
+  await page.mouse.move(a.x,a.y);await page.mouse.down();await page.mouse.move((a.x+z.x)/2,a.y,{steps:5});
+  await expect(page.locator('.drag-sprite')).toBeVisible();
+  await expect(app.sq('g2').locator(':scope > .piece')).toBeHidden();
+  expect((await page.locator('.drag-sprite').boundingBox()).x).toBeGreaterThan(from.x+5);
+  await page.mouse.move(z.x,z.y,{steps:5});await page.mouse.up();await app.phase('explore');
+  await expect(page.locator('.drag-sprite')).toHaveCount(0);
+  expect(await page.evaluate(()=>flowSquares.every(el=>el===document.querySelector('[data-square="'+el.dataset.square+'"]'))&&steadyPiece===document.querySelector('[data-square="f6"] > .piece'))).toBe(true);
+  await app.tap(page.locator('#resetBtn'));await app.phase('key');
+  const square=await app.sq('g2').boundingBox();await page.mouse.move(square.x+square.width/2,square.y+square.height/2);await page.mouse.down();
+  await page.mouse.move(square.x+square.width,square.y,{steps:6});await expect(page.locator('.drag-sprite')).toBeVisible();
+  await page.locator('#board').dispatchEvent('pointercancel',{pointerId:1});await page.mouse.up();
+  await expect(page.locator('.drag-sprite,.selected')).toHaveCount(0);await expect(app.sq('g2').locator(':scope > .piece')).toBeVisible();
+});
+
+test('audio state updates preserve the focused defence chip and mute changes made during the preview',async({page,app})=>{
+  await key(page,app);await app.tap(page.locator('#showBranchesBtn'));
+  const chip=page.locator('.branch-chip').first();await chip.focus();
+  await page.evaluate(()=>{window.focusedChip=document.activeElement;for(let i=0;i<20;i++)dispatchEvent(new CustomEvent('mate-two:audio-state'));});
+  await expect(chip).toBeFocused();expect(await page.evaluate(()=>focusedChip.isConnected)).toBe(true);
+  await app.tap(page.locator('#audioTestBtn'));
+  await expect.poll(async()=>(await app.state()).soundStatus.ready).toBe(true);
+  await page.evaluate(()=>document.getElementById('soundBtn').click());await page.waitForTimeout(500);
+  const state=await app.state();expect(state.audioOn).toBe(false);expect(state.soundStatus.effectsOn).toBe(false);
+  await page.reload();await app.phase('explore');expect((await app.state()).audioOn).toBe(false);
+});
+
+test('faster playback persists and keeps the checkmate explanation, batch result and legal return',async({page,app})=>{
+  expect((await app.state()).quickOn).toBe(false);await app.tap(page.locator('#tempoBtn'));
+  await page.reload();await app.phase('key');expect((await app.state()).quickOn).toBe(true);
+  await expect(page.locator('#tempoBtn')).toHaveText('再生 速め');
+  await key(page,app);await open(page,app,'d3d2');await page.emulateMedia({reducedMotion:'no-preference'});
+  await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
+  await page.waitForFunction(()=>window.__mateTwoDebug.state().mateProofStep==='coverage');
+  await expect(page.locator('#boardLegend')).toContainText('黒の合法応手 0');
+  await app.phase('explore');expect((await app.state()).solved).toBe(2);await expect(page.locator('.move-sprite,.motion-arrow')).toHaveCount(0);
+  await app.tap(page.locator('#resetBtn'));await app.phase('key');expect((await app.state()).quickOn).toBe(true);
+});
+
+test('iPhone play and return controls stay beside the board within the first viewport',async({page,app})=>{
+  for(const [width,height] of [[320,568],[375,667],[390,664],[430,932]]){
+    await page.setViewportSize({width,height});await page.evaluate(()=>scrollTo(0,0));
+    for(const id of ['actionBar','hintToggle','revealBtn']){
+      const box=await page.locator('#'+id).boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(height);
+    }
+  }
+  await page.setViewportSize({width:390,height:664});await key(page,app);await open(page,app,'d3d2');
+  const button=await page.locator('#returnBtn').boundingBox();expect(button.y+button.height).toBeLessThanOrEqual(664);
+  await app.tap(page.locator('#returnBtn'));await app.phase('explore');await expect(page.locator('#motionCaption')).toBeHidden();
+});
