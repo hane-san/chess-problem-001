@@ -236,15 +236,26 @@ test('five matching shadows shatter together before a beat and rewind; progress 
 test('failure automatically breaks the unsuccessful move, pauses, then rewinds every demonstrated move exactly',async({page,app})=>{
   await key(page,app);await open(page,app,'d3d4');const before=(await app.state()).viewFen;
   await page.emulateMedia({reducedMotion:'no-preference'});
+  // Observe the short hold before the operation starts. Polling *after* the
+  // 6 fracture pieces appear can miss the entire short-lived beat on WebKit.
+  await page.evaluate(()=>{
+    window.__failureStages=[];
+    const snapshot=()=>{
+      const stage=document.body.dataset.playback;
+      const rook=document.querySelector('[data-square="b6"] > .piece.white');
+      window.__failureStages.push({stage,rook:rook?getComputedStyle(rook).visibility:null});
+    };
+    const observer=new MutationObserver(snapshot);
+    observer.observe(document.body,{attributes:true,attributeFilter:['data-playback']});
+    window.__stopFailureObserver=()=>observer.disconnect();
+  });
   await app.tap(app.sq('b5'));await app.tap(app.sq('b6'));await app.phase('explain');
   expect((await app.state()).explanation).toMatchObject({survival:'Kg3',autoRewind:true});
-  await expect(page.locator('.attempt-defeated .shatter-fragment')).toHaveCount(6);
-  const beat=await page.waitForFunction(()=>{
-    const s=window.__mateTwoDebug.state();if(s.playbackStage!=='hold')return false;
-    return {phase:s.phase,rook:getComputedStyle(document.querySelector('[data-square="b6"] > .piece.white')).visibility};
-  });
-  expect(await beat.jsonValue()).toEqual({phase:'explain',rook:'hidden'});
-  await app.phase('mate');expect((await app.state()).viewFen).toBe(before);
+  await app.phase('mate',25000);
+  const stages=await page.evaluate(()=>{window.__stopFailureObserver?.();return window.__failureStages;});
+  expect(stages.some(x=>x.stage==='shatter')).toBe(true);
+  expect(stages.some(x=>x.stage==='hold'&&x.rook==='hidden')).toBe(true);
+  expect((await app.state()).viewFen).toBe(before);
   await expect(page.locator('.move-sprite,.shatter-fragment,.analysis-arrow')).toHaveCount(0);
   await expect(page.locator('#solvedCount')).toHaveText('0 / 13');
 });
