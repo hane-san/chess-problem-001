@@ -293,3 +293,41 @@ footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1
 .secondary-controls .save-status { flex: 1; min-width: 85px; }
 @media (max-width: 430px) { .lab-controls button { padding-left: 7px; padding-right: 7px; } .lab-controls #revealBtn { gap: 5px; } }
 @media (prefers-reduced-motion: reduce) { .hint-origin > .piece, .mate-impact::after { animation: none; } }
+
+
+/* King identities are always visible and use distinct outlines by side.
+   Never rely on subtle silhouette differences to identify the King. */
+.square.king-square.king-white {
+  box-shadow: inset 0 0 0 2.5px #f5e8b2, inset 0 0 20px #fff0b533;
+}
+.square.king-square.king-black {
+  box-shadow: inset 0 0 0 2.5px #f0ab87, inset 0 0 20px #f5af762f;
+}
+.king-square > .piece-k { width: 98%; height: 98%; filter: drop-shadow(0 1px 2px #14271d66); }
+.king-square > .piece-k svg { transform: scale(1.035); }
+.king-identity {
+  position: absolute; bottom: 2px; right: 2px; z-index: 17;
+  border-radius: 4px; border: 1px solid #17261a7a;
+  min-height: 14px; padding: 1px 3px 0;
+  font: 700 clamp(9px,1.35vw,11px)/1.25 var(--sans,system-ui);
+  letter-spacing: .035em; white-space: nowrap; text-align: center;
+  pointer-events: none; box-shadow: 0 2px 6px #101a1160;
+}
+.king-identity.white-king { background: #f5e8b2; color: #2d392f; }
+.king-identity.black-king { background: #66352a; color: #fff0d8; border-color: #e3a689; }
+/* Victory is first a chess explanation, only then a decorative shatter. */
+.showing-mate-proof .square.analysis-king {
+  box-shadow: inset 0 0 0 3px #ffd98b, inset 0 0 25px #ffd98b40;
+}
+.showing-mate-proof .square.analysis-controlled {
+  box-shadow: inset 0 0 0 2.5px #d9f69ac2;
+}
+.showing-mate-proof .analysis-arrow.white-control.check {
+  stroke: #f5ffbd; stroke-width: 4.5; opacity: 1;
+}
+.showing-mate-proof .analysis-cell-mark {
+  color: #243427; background: #ecf5b8; font-weight: 800;
+}
+@media (max-width: 430px) {
+  .king-identity { font-size: 9px; min-height: 13px; padding: 1px 2px 0; }
+}
