@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>MATE / TWO — Chess Problem Lab</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=20261019-audiomotion2">
+  <link rel="stylesheet" href="styles.css?v=20261019-flow1">
 </head>
 <body>
   <a class="skip-link" href="#board">盤面へ移動</a>
@@ -49,6 +49,22 @@
           <span>D. J. Shire <span class="meta-dot">·</span> 1997</span>
           <span>WAITING <span class="meta-dot">/</span> #2</span>
         </div>
+        <div id="actionBar" class="action-bar">
+          <span class="action-indicator" aria-hidden="true"></span>
+          <span id="actionStatus" class="action-status" role="status" aria-live="polite">白の初手を考える · 駒を選択</span>
+          <button id="returnBtn" type="button" hidden>↶ 黒の選択へ戻る</button>
+        </div>
+        <div class="lab-controls">
+          <button id="backBtn" type="button" hidden>↶ 応手へ</button>
+          <button id="hintToggle" type="button" aria-pressed="true">✧ 駒ヒント ON</button>
+          <button id="revealBtn" type="button">初手を見る <span aria-hidden="true">↗</span></button>
+        </div>
+        <div id="analysisTools" class="explanation-tabs" role="group" aria-label="解説の表示" hidden>
+          <button id="responseViewBtn" type="button" aria-pressed="false">① 黒の応手を再生</button>
+          <button id="coverageViewBtn" type="button" aria-pressed="true">② 王の逃げ道</button>
+          <button id="blackControlBtn" type="button" aria-pressed="false">③ 黒の利き</button>
+          <button id="survivalViewBtn" type="button" aria-pressed="false">④ 白の逃げ・受け</button>
+        </div>
         <div id="boardLegend" class="board-legend" hidden></div>
       </div>
 
@@ -65,12 +81,6 @@
           <li data-step="mate"><span>03</span> 詰ませる</li>
         </ol>
 
-        <div id="actionBar" class="action-bar" role="status" aria-live="polite">
-          <span class="action-indicator" aria-hidden="true"></span>
-          <span id="actionStatus" class="action-status">白の初手を考える · 駒を選択</span>
-          <button id="returnBtn" type="button" hidden>↶ 黒の選択へ戻る</button>
-        </div>
-
         <section class="phase-card">
           <div class="phase-index">01</div>
           <div><span class="label" id="phaseLabel">FIND THE KEY</span><h2 id="phaseTitle">白の初手を探しましょう</h2></div>
@@ -85,12 +95,6 @@
         <p id="audioStatus" class="audio-status" role="status" aria-live="polite">♫ BGMは初期OFFです。上の音符でON、音を試すで確認できます。</p>
 
         <section id="explanationPanel" class="explanation-panel" aria-label="失敗した手の盤上解説" hidden>
-          <div class="explanation-tabs" role="group" aria-label="解説の表示">
-            <button id="responseViewBtn" type="button" aria-pressed="false">① 黒の応手を再生</button>
-            <button id="coverageViewBtn" type="button" aria-pressed="true">② 王の逃げ道</button>
-            <button id="blackControlBtn" type="button" aria-pressed="false">③ 黒の利き</button>
-            <button id="survivalViewBtn" type="button" aria-pressed="false">④ 白の逃げ・受け</button>
-          </div>
           <p id="explanationDetail" aria-live="polite"></p>
           <div class="explanation-actions">
             <button id="pauseExplanationBtn" type="button">Ⅱ 止めて読む</button>
@@ -106,14 +110,10 @@
 
         <div id="branchTray" class="branch-tray" aria-label="黒の防御手一覧"></div>
 
-        <div class="lab-controls">
-          <button id="backBtn" type="button" hidden>↶ 応手へ</button>
-          <button id="hintToggle" type="button" aria-pressed="true">✧ 駒ヒント ON</button>
-          <button id="revealBtn" type="button">初手を見る <span aria-hidden="true">↗</span></button>
-        </div>
         <div class="secondary-controls">
           <button id="showBranchesBtn" type="button" aria-controls="branchTray" aria-expanded="false" hidden>応手一覧</button>
           <button id="strategyBtn" type="button">考え方</button>
+          <button id="tempoBtn" type="button" aria-pressed="false" aria-label="再生を速める">再生 標準</button>
           <button id="audioTestBtn" type="button" aria-label="音を試す。短い確認音を再生">♫ 音を試す</button>
           <span id="saveStatus" class="save-status" role="status"></span>
           <button id="resetBtn" type="button">はじめから</button>
@@ -129,7 +129,7 @@
   <div id="startupError" class="startup-error" role="alert" hidden><strong>盤面を読み込めませんでした</strong><p>ページを再読み込みしてください。進み具合はこの端末に保存されています。</p><button type="button" onclick="location.reload()">再読み込み</button></div>
   <noscript><p class="noscript">このアプリを使うにはJavaScriptを有効にしてください。</p></noscript>
   <script type="module">
-    import('./lab-v2.js?v=20261019-audiomotion2').catch(() => {
+    import('./lab-v2.js?v=20261019-flow1').catch(() => {
       document.getElementById('startupError').hidden = false;
     });
   </script>

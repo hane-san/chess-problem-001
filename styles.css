@@ -395,3 +395,29 @@ body[data-playback="mate-proof"] .action-indicator{background:#f5d18d}
   .audio-status{font-size:9px;margin:2px 0 7px}
 }
 @media(prefers-reduced-motion:reduce){.motion-arrow{stroke-dasharray:none}}
+
+/* Keep play controls beside the board and reserve their height during playback. */
+.board-column { overflow-anchor: none; }
+.board-column .action-bar { min-height: 56px; margin: 10px 0 8px; }
+.board-column .lab-controls { margin-bottom: 8px; }
+.board-column .explanation-tabs { margin-top: 8px; }
+.secondary-controls { column-gap: 6px; row-gap: 2px; }
+.secondary-controls button { min-width: 44px; }
+.secondary-controls .save-status { order: 2; flex: 0 0 100%; padding-bottom: 5px; white-space: nowrap; }
+#audioTestBtn { min-height: 44px; }
+body[data-phase="explain"] .board-column .lab-controls { display: none; }
+.drag-sprite { z-index: 50; filter: drop-shadow(0 8px 6px #0c241e66); }
+#tempoBtn[aria-pressed="true"] { color: var(--accent); }
+@media(min-width:901px) {
+  .workspace { align-items: start; }
+  .board-column { position: sticky; top: 20px; }
+}
+@media(max-width:900px) {
+  .topbar { min-height: 64px; }
+  .workspace { padding-top: 12px; gap: 18px; }
+  .board-foot { padding-top: 7px; font-size: 9px; }
+  .board-column .action-bar { margin-top: 7px; }
+}
+@media(max-width:900px) and (orientation:landscape) and (max-height:550px) {
+  .board-column { position: static; }
+}

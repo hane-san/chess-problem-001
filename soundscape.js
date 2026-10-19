@@ -33,6 +33,7 @@ export class Soundscape {
     this.tempo=112;this.stepSeconds=60/this.tempo/2;this.noiseBuffer=null;
     this.voices=new Set();this.visibilityHandler=()=>this.handleVisibility();
     this.problem=null;this.audioState='not-started';this.analyser=null;this.scheduled=0;this.lastSignal=0;
+    this.unlocking=null;this.lastNotice=null;this.previewBus=null;this.lastPreview=-Infinity;this.meterSamples=null;
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',this.visibilityHandler);
   }
   createContext(){
@@ -51,16 +52,28 @@ export class Soundscape {
     const analyser=ctx.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.55;
     music.connect(master);effects.connect(master);master.connect(compressor);compressor.connect(analyser);analyser.connect(ctx.destination);
     this.context=ctx;this.master=master;this.musicBus=music;this.effectsBus=effects;this.analyser=analyser;
+    this.previewBus=ctx.createGain();this.previewBus.gain.value=.9;this.previewBus.connect(master);
     this.audioState=ctx.state;
     ctx.addEventListener?.('statechange',()=>{this.audioState=ctx.state;this.notify();});
     this.notify();
     return ctx;
   }
   notify(){
+    const state=[this.context?.state,this.musicOn,this.effectsOn,this.musicTimer!==null,this.problem].join('|');
+    if(state===this.lastNotice)return;this.lastNotice=state;
     if(typeof window!=='undefined'&&typeof window.CustomEvent==='function')
       window.dispatchEvent(new CustomEvent('mate-two:audio-state'));
   }
-  async unlock(){
+  unlock(){
+    if(this.context?.state==='running'&&!this.problem){
+      if(this.musicOn&&this.musicTimer===null&&!document.hidden){this.fade(this.musicBus.gain,.52,.4);this.startScheduler();}
+      return Promise.resolve(true);
+    }
+    if(this.unlocking)return this.unlocking;
+    this.unlocking=this.resumeAudio().finally(()=>{this.unlocking=null;});
+    return this.unlocking;
+  }
+  async resumeAudio(){
     try{
       const ctx=this.createContext();
       if(!ctx){this.problem='このブラウザはWeb Audio非対応です';this.notify();return false;}
@@ -94,8 +107,8 @@ export class Soundscape {
   fade(param,to,seconds=.16){
     if(!this.context)return;
     const at=this.context.currentTime;
-    param.cancelScheduledValues(at);
-    param.setValueAtTime(param.value,at);
+    if(typeof param.cancelAndHoldAtTime==='function')param.cancelAndHoldAtTime(at);
+    else{const current=param.value;param.cancelScheduledValues(at);param.setValueAtTime(current,at);}
     param.linearRampToValueAtTime(to,at+seconds);
   }
   setMusic(on){
@@ -131,6 +144,7 @@ export class Soundscape {
   stopScheduler(){
     if(this.musicTimer!==null)clearInterval(this.musicTimer);
     this.musicTimer=null;
+    this.notify();
   }
   startScheduler(){
     if(!this.context||this.context.state!=='running'||!this.musicOn||document.hidden)return;
@@ -138,6 +152,7 @@ export class Soundscape {
     this.nextTime=this.context.currentTime+.085;
     this.musicTimer=setInterval(()=>this.scheduleAhead(),65);
     this.scheduleAhead();
+    this.notify();
   }
   scheduleAhead(){
     const ctx=this.context;
@@ -199,13 +214,13 @@ export class Soundscape {
     if(index===0||index===4)this.note(barNote-24,time,.11,.04,'bass');
   }
   // Effects share the same context but a different bus, so BGM volume is independent.
-  effect(kind){
-    if(!this.effectsOn)return;
+  effect(kind,{force=false,bus=this.effectsBus,delay=0}={}){
+    if(!this.effectsOn&&!force)return;
     const ctx=this.context;
     if(!ctx||ctx.state!=='running')return;
-    const now=ctx.currentTime+.006;
+    const now=ctx.currentTime+.006+delay;
     const play=(pitch,delay,dur,level='soft')=>{
-      this.note(pitch,now+delay,dur,level==='accent'?.19:.09,'pluck',this.effectsBus);
+      this.note(pitch,now+delay,dur,level==='accent'?.19:.09,'pluck',bus);
     };
     switch(kind){
       case 'select': play(76,0,.055);break;
@@ -214,14 +229,14 @@ export class Soundscape {
       case 'rewind': play(74,0,.09);play(67,.075,.13);break;
       case 'key': play(74,0,.13);play(77,.13,.15);play(81,.28,.2,'accent');break;
       case 'mate':
-      case 'victory': play(74,0,.09);play(81,.08,.20);play(86,.22,.28,'accent');this.shards(now+.045,.19);break;
-      case 'capture': this.shards(now,.26);play(55,.01,.11,'accent');break;
+      case 'victory': play(74,0,.09);play(81,.08,.20);play(86,.22,.28,'accent');this.shards(now+.045,.19,bus);break;
+      case 'capture': this.shards(now,.26,bus);play(55,.01,.11,'accent');break;
       case 'error': play(57,0,.13);play(53,.12,.16);break;
       default: play(64,0,.07);
     }
   }
-  shards(when,duration){
-    const ctx=this.context;if(!ctx||!this.effectsBus)return;
+  shards(when,duration,bus=this.effectsBus){
+    const ctx=this.context;if(!ctx||!bus)return;
     if(!this.noiseBuffer){
       const length=Math.ceil(ctx.sampleRate*.33),buffer=ctx.createBuffer(1,length,ctx.sampleRate),data=buffer.getChannelData(0);
       // Deterministic noise with smoothly rounded first/last samples.
@@ -238,7 +253,7 @@ export class Soundscape {
     gain.gain.setValueAtTime(.0001,when);
     gain.gain.linearRampToValueAtTime(.14,when+.012);
     gain.gain.exponentialRampToValueAtTime(.0001,when+duration);
-    source.connect(filter);filter.connect(gain);gain.connect(this.effectsBus);
+    source.connect(filter);filter.connect(gain);gain.connect(bus);
     source.start(when);source.stop(when+duration+.015);
     source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
   }
@@ -246,20 +261,20 @@ export class Soundscape {
     const ready=await this.unlock();
     if(!ready)return false;
     // The test requires an explicit tap; it never changes music preferences.
-    const before=this.effectsOn;this.effectsOn=true;
-    // Explicit test must be audible even if the user has muted regular SFX.
-    if(this.effectsBus)this.fade(this.effectsBus.gain,.9,.035);
-    this.effect('key');
-    setTimeout(()=>{this.effect('capture');this.effectsOn=before;
-      if(this.effectsBus)this.fade(this.effectsBus.gain,before?.86:0,.35);
-    },300);
+    // Use an independent preview bus: an in-flight test must never restore an
+    // obsolete mute preference after another tap. Repeated taps do not pile up.
+    const now=this.context.currentTime;
+    if(now-this.lastPreview<.9)return true;
+    this.lastPreview=now;
+    this.effect('key',{force:true,bus:this.previewBus});
+    this.effect('capture',{force:true,bus:this.previewBus,delay:.3});
     return true;
   }
-  status(){
+  status({meter=true}={}){
     let signal=0;
-    if(this.analyser&&this.context?.state==='running'){
+    if(meter&&this.analyser&&this.context?.state==='running'){
       try{
-        const samples=new Uint8Array(this.analyser.fftSize);
+        const samples=this.meterSamples ||= new Uint8Array(this.analyser.fftSize);
         this.analyser.getByteTimeDomainData(samples);
         for(const sample of samples)signal=Math.max(signal,Math.abs(sample-128)/128);
       }catch{}

@@ -1,7 +1,7 @@
 import { Chess } from './vendor/chess.js';
-import { Soundscape } from './soundscape.js';
+import { Soundscape } from './soundscape.js?v=20261019-flow1';
 import { problems } from './data/problems.js';
-import { kingSquare, kingCoverage, controlMap, controlRays, chooseDefence, keyRefutation, describeFailure, whiteSurvival, shadowsDefeatedBy } from './tactics.js?v=20261018-shadow2';
+import { kingSquare, kingCoverage, controlMap, controlRays, chooseDefence, keyRefutation, describeFailure, whiteSurvival, shadowsDefeatedBy } from './tactics.js?v=20261019-flow1';
 
 /* MATE / TWO 2.0 — one rules authority, one gesture controller, one animation queue.
    The board is always rendered from a legal chess.js FEN, never from decorative DOM state. */
@@ -77,6 +77,7 @@ let listOpen = false;
 let orientation = 'white';
 let audioOn = true;
 let musicOn = false;
+let quickOn = false;
 let audioTestMessage=null;
 const soundscape = new Soundscape();
 let overlayAction = null;
@@ -92,6 +93,14 @@ let persistenceAvailable = true;
 let explanation = null;
 let failureRewindTimer = null;
 let playbackStage = null;
+const squares = new Map();
+const trayButtons = new Map();
+let cachedFen=null,cachedEngine=null;
+let dragFrame=null;
+
+function pace(ms){return Math.round(ms*(quickOn?.65:1));}
+function beat(normal,reduced){return wait(reduceMotion.matches?reduced:pace(normal));}
+function setText(element,value){if(element.textContent!==value)element.textContent=value;}
 
 function setPlaybackStage(stage){playbackStage=stage;document.body.dataset.playback=stage||'';if($('actionStatus'))renderUI();}
 function pauseFailureRewind(){
@@ -107,7 +116,7 @@ function writeStorage(key,value){
   try { localStorage.setItem(key,JSON.stringify(value)); }
   catch { persistenceAvailable=false; }
 }
-function savePreferences(){writeStorage(PREFERENCES_KEY,{audioOn,musicOn,orientation,hintsOn});}
+function savePreferences(){writeStorage(PREFERENCES_KEY,{audioOn,musicOn,quickOn,orientation,hintsOn});}
 function saveProgress(){
   // Save a legal checkpoint, never an intermediate animation frame.
   const checkpoint=phase==='black'?'mate':phase==='explain'?explanation.returnPhase:['complete','victory','review'].includes(phase)?'explore':phase;
@@ -121,6 +130,7 @@ function restoreProgress(){
   const preferences=readStorage(PREFERENCES_KEY);
   audioOn=preferences?.audioOn!==false;
   musicOn=preferences?.musicOn===true;
+  quickOn=preferences?.quickOn===true;
   soundscape.effectsOn=audioOn;
   soundscape.musicOn=musicOn;
   orientation=preferences?.orientation==='black'?'black':'white';
@@ -140,10 +150,17 @@ function restoreProgress(){
   return phase!=='key';
 }
 function cancelGesture(){
-  if(gesture){try{board.releasePointerCapture(gesture.id);}catch{}}
-  gesture=null;hover=null;
+  const current=gesture;gesture=null;
+  if(dragFrame!==null){cancelAnimationFrame(dragFrame);dragFrame=null;}
+  current?.sprite?.remove();
+  if(current?.piece)current.piece.style.visibility='';
+  if(current){try{board.releasePointerCapture(current.id);}catch{}}
+  hover=null;
 }
-function cancelAnimations(){for(const animation of animations)animation.cancel();animations.clear();clearMotionGuide();}
+function cancelAnimations(){
+  for(const animation of animations)animation.cancel();animations.clear();clearMotionGuide();
+  board.querySelectorAll('.move-sprite,.capture-burst').forEach(el=>el.remove());
+}
 // Safari may suspend Web Animations without settling animation.finished.
 async function settleAnimation(animation,duration){
   let watchdog;
@@ -212,7 +229,7 @@ function squareAt(x,y){
   const element = document.elementFromPoint(x,y)?.closest?.('.square');
   return element && board.contains(element) ? element.dataset.square : null;
 }
-function engine(){return new Chess(viewFen);}
+function engine(){if(cachedFen!==viewFen){cachedEngine=new Chess(viewFen);cachedFen=viewFen;}return cachedEngine;}
 function legalFrom(from){try{return engine().moves({square:from,verbose:true});}catch{return [];}}
 function targetMove(to){return legal.find(m=>m.to===to);}
 function clearSelection(){selected=null;legal=[];hover=null;updateGuides();}
@@ -248,7 +265,7 @@ function showOverlay(title,detail,action,kind='mate'){
   overlay.setAttribute('aria-label',title+'。'+detail+'。'+action);
   overlay.focus({preventScroll:true});
 }
-function squareElement(sq){return board.querySelector('[data-square="'+sq+'"]');}
+function squareElement(sq){return squares.get(sq);}
 function clearMotionGuide(){
   clearTimeout(motionTimer);motionTimer=null;moveTrace=null;
   $('motionCaption').hidden=true;$('motionLines').replaceChildren();
@@ -305,7 +322,7 @@ function showMotionGuide(from,to,{reverse=false,capture=false}={}){
 function settleMotionGuide(to){
   if(!moveTrace)return;
   board.querySelector('[data-square="'+to+'"]')?.classList.add('motion-arrived');
-  motionTimer=setTimeout(clearMotionGuide,reduceMotion.matches?200:720);
+  motionTimer=setTimeout(clearMotionGuide,reduceMotion.matches?180:pace(360));
 }
 
 function rankFiles(){
@@ -337,36 +354,46 @@ function makePiece(type,color){
 }
 function renderBoard(){
   const position=engine();
-  const hadFocus=board.contains(document.activeElement);
-  board.innerHTML='';
+  const order=rankFiles();
+  const reorder=board.firstElementChild?.dataset.square!==order[0];
+  const focusedSquare=board.contains(document.activeElement)?document.activeElement.closest('.square')?.dataset.square:null;
+  // Reuse the same 64 squares and unchanged SVG pieces across legal checkpoints.
+  // Hidden animation sources are replaced so a cancelled operation cannot later
+  // alter a new animation's visibility through an obsolete element reference.
+  board.querySelectorAll('.ghost-target,.branch-origin-count,.analysis-cell-mark,.motion-echo,.capture-burst').forEach(el=>el.remove());
   rankFiles().forEach(sq=>{
-    const el=document.createElement('div');
+    let el=squares.get(sq);
+    if(!el){el=document.createElement('div');el.dataset.square=sq;squares.set(sq,el);}
     const file=sq.charCodeAt(0)-97;
     const rank=Number(sq[1]);
     el.className='square '+((file+rank)%2?'light':'dark');
-    el.dataset.square=sq;
     const piece=position.get(sq);
-    if(piece) el.append(makePiece(piece.type,piece.color));
-    if((orientation==='white'&&rank===1)||(orientation==='black'&&rank===8)){
+    const stamp=piece?piece.color+piece.type:'';
+    const current=el.querySelector(':scope > .piece');
+    if(el.dataset.piece!==stamp||current?.style.visibility==='hidden'){
+      current?.remove();if(piece)el.append(makePiece(piece.type,piece.color));el.dataset.piece=stamp;
+    }
+    if(reorder)el.querySelectorAll('.coord').forEach(mark=>mark.remove());
+    if(reorder&&((orientation==='white'&&rank===1)||(orientation==='black'&&rank===8))){
       const coord=document.createElement('span');
       coord.className='coord file';coord.textContent=sq[0];el.append(coord);
     }
-    if((orientation==='white'&&sq[0]==='a')||(orientation==='black'&&sq[0]==='h')){
+    if(reorder&&((orientation==='white'&&sq[0]==='a')||(orientation==='black'&&sq[0]==='h'))){
       const coord=document.createElement('span');
       coord.className='coord rank';coord.textContent=sq[1];el.append(coord);
     }
+    let identity=el.querySelector('.king-identity');
     if(piece && piece.type==='k'){
-      const identity=document.createElement('span');
+      if(!identity){identity=document.createElement('span');el.append(identity);}
       identity.className='king-identity '+(piece.color==='w'?'white-king':'black-king');
-      identity.textContent=piece.color==='w'?'白王':'黒王';
+      setText(identity,piece.color==='w'?'白王':'黒王');
       identity.setAttribute('aria-hidden','true');
       el.classList.add('king-square',piece.color==='w'?'king-white':'king-black');
-      el.append(identity);
-    }
+    }else identity?.remove();
     el.setAttribute('aria-label',sq+' '+(piece?(piece.color==='w'?'白':'黒')+NAME[piece.type]:'空きマス'));
     el.setAttribute('role','button');
     el.tabIndex=sq===keyboardSquare?0:-1;
-    board.append(el);
+    if(reorder)board.append(el);
   });
   updateGuides();
   if(phase==='explore'||phase==='complete')renderGhosts();
@@ -374,7 +401,7 @@ function renderBoard(){
     if(active&&['black','mate','explain','victory'].includes(phase))renderResidues();
     drawExplanation();
   }
-  if(hadFocus)squareElement(keyboardSquare)?.focus({preventScroll:true});
+  if(reorder&&focusedSquare)squareElement(focusedSquare)?.focus({preventScroll:true});
 }
 function renderGhosts(){
   lines.replaceChildren();
@@ -525,27 +552,40 @@ function setBlackFocus(from){
   saveProgress();
 }
 function renderTray(){
-  branchTray.replaceChildren();
   branchTray.classList.toggle('open',listOpen && (phase==='explore'||phase==='mate'||phase==='complete'));
   branches.forEach(b=>{
-    const button=document.createElement('button');
+    let button=trayButtons.get(b.id);
+    if(!button){
+      button=document.createElement('button');button.dataset.branch=b.id;button.type='button';
+      button.addEventListener('click',()=>{if(!busy)run(()=>openBranch(b));});
+      trayButtons.set(b.id,button);branchTray.append(button);
+    }
     button.className='branch-chip'+(solved.has(b.id)?' done':'')+(active?.id===b.id?' active':'');
-    button.dataset.branch=b.id;
-    button.textContent=(solved.has(b.id)?'✓ ':'')+'…'+b.san;
-    button.type='button';
+    setText(button,(solved.has(b.id)?'✓ ':'')+'…'+b.san);
     button.disabled=busy||!overlay.hidden;
     button.setAttribute('aria-label','黒 '+b.san+(solved.has(b.id)?' 検証済み':' を検証'));
-    if(active?.id===b.id)button.setAttribute('aria-current','true');
-    button.addEventListener('click',()=>{if(!busy)run(()=>openBranch(b));});
-    branchTray.append(button);
+    if(active?.id===b.id)button.setAttribute('aria-current','true');else button.removeAttribute('aria-current');
   });
+}
+function renderAudioUI(){
+  $('soundBtn').setAttribute('aria-pressed',String(audioOn));
+  $('soundBtn').setAttribute('aria-label','効果音 '+(audioOn?'オン':'オフ'));
+  $('musicBtn').setAttribute('aria-pressed',String(musicOn));
+  $('musicBtn').setAttribute('aria-label','BGM '+(musicOn?'オン':'オフ'));
+  setText($('musicBtn').querySelector('span'),musicOn?'BGM ON':'BGM OFF');
+  const audio=soundscape.status({meter:false}),audioStatus=$('audioStatus');
+  audioStatus.dataset.state=audio.problem?'error':audio.ready?'active':'idle';
+  setText(audioStatus,audioTestMessage|| (audio.problem?'♫ '+audio.problem
+    :audio.ready?(musicOn?(audio.scheduler?'♫ BGM再生中 · 効果音 '+(audioOn?'ON':'OFF'):'♫ BGM再生準備中'):'♫ 効果音 '+(audioOn?'ON':'OFF')+' · BGM OFF')
+    :musicOn?'♫ BGM待機中 · 「音を試す」をタップしてください'
+    :'♫ BGM初期OFF · 音が聞こえない場合は「音を試す」'));
 }
 function renderUI(){
   document.body.dataset.phase=phase;document.body.dataset.busy=String(busy);
   board.setAttribute('aria-busy',String(busy));
   const total=branches.length;
-  solvedCount.textContent=solved.size+' / '+total;
-  $('branchCount').textContent='残り '+(total-solved.size)+' 体';
+  setText(solvedCount,solved.size+' / '+total);
+  setText($('branchCount'),'残り '+(total-solved.size)+' 体');
   $('progressBar').style.width=(solved.size/total*100)+'%';
   $('progressTrack').setAttribute('aria-valuenow',String(solved.size));
   $('progressTrack').setAttribute('aria-valuemax',String(total));
@@ -565,21 +605,14 @@ function renderUI(){
     review:['↻','PROOF REVIEW','すべての詰みを振り返る','黒の応手と白の詰みを順に再生しています。'],
     complete:['✓','ALL SHADOWS CLEARED','すべてのシャドーを攻略','全13手に詰みを証明しました。応手一覧から見直せます。']
   };
-  const info=phases[phase];phaseIndex.textContent=info[0];$('phaseLabel').textContent=info[1];phaseTitle.textContent=info[2];helpText.textContent=info[3];
+  const info=phases[phase];setText(phaseIndex,info[0]);setText($('phaseLabel'),info[1]);setText(phaseTitle,info[2]);setText(helpText,info[3]);
   backBtn.hidden=phase!=='mate';backBtn.disabled=busy;
   showBranchesBtn.hidden=['key','explain','black','victory','review'].includes(phase);
-  showBranchesBtn.textContent=listOpen?'一覧を閉じる':'応手一覧';showBranchesBtn.setAttribute('aria-expanded',String(listOpen));
-  $('soundBtn').setAttribute('aria-pressed',String(audioOn));
-  $('soundBtn').setAttribute('aria-label','効果音 '+(audioOn?'オン':'オフ'));
-  $('musicBtn').setAttribute('aria-pressed',String(musicOn));
-  $('musicBtn').setAttribute('aria-label','BGM '+(musicOn?'オン':'オフ'));
-  $('musicBtn').querySelector('span').textContent=musicOn?'BGM ON':'BGM OFF';
-  const audio=soundscape.status(),audioStatus=$('audioStatus');
-  audioStatus.dataset.state=audio.problem?'error':audio.ready?'active':'idle';
-  audioStatus.textContent=audioTestMessage|| (audio.problem?'♫ '+audio.problem
-    :audio.ready?(musicOn?(audio.scheduler?'♫ BGM再生中 · 効果音 '+(audioOn?'ON':'OFF'):'♫ BGM再生準備中'):'♫ 効果音 '+(audioOn?'ON':'OFF')+' · BGM OFF')
-    :musicOn?'♫ BGM待機中 · 「音を試す」をタップしてください'
-    :'♫ BGM初期OFF · 音が聞こえない場合は「音を試す」');
+  setText(showBranchesBtn,listOpen?'一覧を閉じる':'応手一覧');showBranchesBtn.setAttribute('aria-expanded',String(listOpen));
+  renderAudioUI();
+  $('tempoBtn').setAttribute('aria-pressed',String(quickOn));
+  $('tempoBtn').setAttribute('aria-label','再生速度 '+(quickOn?'速め。標準に戻す':'標準。速めに切り替える'));
+  setText($('tempoBtn'),'再生 '+(quickOn?'速め':'標準'));
   const returning=busy||['black','mate','explain','victory','review','complete'].includes(phase)||(phase==='explore'&&!!focusFrom);
   $('returnBtn').hidden=!returning;
   const status=busy
@@ -615,6 +648,7 @@ function renderUI(){
   $('revealBtn').textContent=phase==='key'?'初手を見る ↗':phase==='mate'?'詰みを見る ↗':solved.size===total?'全手順を再生 ↗':'次のシャドーへ ↗';
   if(locked)board.querySelectorAll('button.ghost-target').forEach(el=>{el.disabled=true;});
   $('explanationPanel').hidden=phase!=='explain';
+  $('analysisTools').hidden=phase!=='explain';
   if(explanation&&phase==='explain'){
     const e=explanation;
     for(const [id,mode] of [['responseViewBtn','response'],['coverageViewBtn','coverage'],['blackControlBtn','black'],['survivalViewBtn','survival']]){
@@ -654,7 +688,7 @@ function burst(square,token){
   host.append(effect);
   setTimeout(()=>effect.remove(),370);
 }
-async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse=false,quiet=false}={},token=sequence){
+async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse=false,quiet=false,release=null}={},token=sequence){
   if(!valid(token))return false;
   if(reduceMotion.matches){
     showMotionGuide(from,to,{reverse,capture});
@@ -673,15 +707,16 @@ async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse
   const boardRect=board.getBoundingClientRect();
   const sprite=document.createElement('div');
   sprite.className='move-sprite'+(reverse?' reverse':'');
-  sprite.style.left=(a.left-boardRect.left)+'px';
-  sprite.style.top=(a.top-boardRect.top)+'px';
+  const startX=release?.x??a.left-boardRect.left,startY=release?.y??a.top-boardRect.top;
+  sprite.style.left=startX+'px';
+  sprite.style.top=startY+'px';
   sprite.style.width=a.width+'px';
   sprite.style.height=a.height+'px';
   sprite.append(piece.cloneNode(true));
   board.append(sprite);
   piece.style.visibility='hidden';
-  const ms=duration;
-  const dx=b.left-a.left,dy=b.top-a.top;
+  const ms=pace(release?140:duration);
+  const dx=b.left-boardRect.left-startX,dy=b.top-boardRect.top-startY;
   try{
     const animation=sprite.animate([
       {transform:'translate3d(0,0,0) scale(1)',offset:0},
@@ -708,31 +743,32 @@ async function animatedMove(from,to,afterFen,{capture=false,duration=290,reverse
   setPosition(afterFen);settleMotionGuide(to);
   return true;
 }
-async function transitionMove(beforeFen,move,{duration=290,quiet=false}={},token=sequence){
+async function transitionMove(beforeFen,move,{duration=290,quiet=false,release=null}={},token=sequence){
   const before=new Chess(beforeFen);
   const target=before.get(move.to);
   const after=new Chess(beforeFen);
   after.move(moveSpec(move));
   setPosition(beforeFen);
-  const ok=await animatedMove(move.from,move.to,after.fen(),{capture:!!target,duration,quiet},token);
+  const ok=await animatedMove(move.from,move.to,after.fen(),{capture:!!target,duration,quiet,release},token);
   return ok?after.fen():null;
 }
-async function rewindMove(beforeFen,move,afterFen,token=sequence,duration=490){
+async function rewindMove(beforeFen,move,afterFen,token=sequence,duration=300){
   if(!valid(token))return;
   setPosition(afterFen);
   await animatedMove(move.to,move.from,beforeFen,{reverse:true,duration,quiet:true},token);
 }
-function ensureBoardVisible(){
+function ensureBoardVisible({force=false}={}){
   // On short iPhone viewports, controls may sit below the board. Bring the
   // whole board back into view before measuring or animating the next move.
   const rect=wrap.getBoundingClientRect();
   const visibleTop=window.visualViewport?.offsetTop || 0;
   const visibleBottom=visibleTop+(window.visualViewport?.height || window.innerHeight);
-  if(rect.top<visibleTop || rect.bottom>visibleBottom)wrap.scrollIntoView({block:'center',behavior:'auto'});
+  const visible=Math.max(0,Math.min(rect.bottom,visibleBottom)-Math.max(rect.top,visibleTop));
+  if((force&&(rect.top<visibleTop||rect.bottom>visibleBottom))||visible<rect.height*.75)wrap.scrollIntoView({block:'center',behavior:'auto'});
 }
 function newOperation(){
   sequence+=1;
-  cancelGesture();ensureBoardVisible();
+  cancelGesture();clearMotionGuide();ensureBoardVisible();
   busy=true;
   clearSelection();
   hideOverlay();
@@ -746,13 +782,13 @@ function endOperation(token){
   updateGuides();renderUI();
   saveProgress();
 }
-async function attemptWhite(move){
+async function attemptWhite(move,{release=null}={}){
   if(busy||!move||completedMate||!['key','mate'].includes(phase))return;
   primeAudio();
   const returnPhase=phase,before=viewFen,token=newOperation();
-  const played=await transitionMove(before,move,{duration:545},token);
+  const played=await transitionMove(before,move,{duration:400,release},token);
   if(!played||!valid(token))return;
-  await wait(reduceMotion.matches?60:220);if(!valid(token))return;
+  await beat(80,60);if(!valid(token))return;
   if(returnPhase==='key'&&move.from+move.to===problem.key.uci){
     phase='explore';active=null;completedMate=false;focusFrom=null;
     setPosition(postKeyFen);
@@ -778,16 +814,16 @@ async function attemptWhite(move){
     setFeedback('① まず、どの駒が王手を掛けた？',
       '緑の矢印が黒王を攻撃する白の駒から伸びています。まずここに注目してください。','good');
     cue('① CHECK','白の駒 → 黒Kingへ王手','key');
-    await wait(reduceMotion.matches?180:850);if(!valid(token))return;
+    await beat(600,180);if(!valid(token))return;
     mateProofStep='coverage';drawExplanation();
     setFeedback('② そして、逃げる場所も応手もない',
       '黒の合法応手は0手。白の利き「×」・黒の自駒「塞」で詰みの理由を確かめましょう。','good');
     cue('② CHECKMATE','黒の合法応手 0 · 逃げ道もない','key');
-    await wait(reduceMotion.matches?450:2250);if(!valid(token))return;
+    await beat(1250,450);if(!valid(token))return;
     mateProof=null;mateProofStep=null;drawExplanation();
     await shadowDefeat([active,...defeated.filter(b=>b.id!==active.id)],move,token);if(!valid(token))return;
     setPlaybackStage('hold');
-    await wait(reduceMotion.matches?180:520);if(!valid(token))return;
+    await beat(360,180);if(!valid(token))return;
     await rewindBranch(token,{defeated});return;
   }
   const position=new Chess(played);
@@ -803,16 +839,16 @@ async function presentFailure(data,token){
   setFeedback(data.reply?'黒の応手を確認しましょう':'この局面は詰みではありません',data.reply?'黒 '+data.reply.san+' を盤上で再生します。':explanation.description.detail,'bad');
   if(data.reply){
     cue('黒の応手','…'+data.reply.san,'bad');
-    await wait(reduceMotion.matches?90:550);if(!valid(token))return;
-    const result=await transitionMove(data.playedFen,data.reply,{duration:680},token);
+    await beat(280,90);if(!valid(token))return;
+    const result=await transitionMove(data.playedFen,data.reply,{duration:460},token);
     if(!result||!valid(token))return;
-    await wait(reduceMotion.matches?100:350);if(!valid(token))return;
+    await beat(150,100);if(!valid(token))return;
   }
   if(explanation.survival){
     explanation.mode='survival';renderUI();
     cue('白の逃げ・受け',explanation.survival.move.san+' でしのぐ一例');
-    await wait(reduceMotion.matches?90:430);if(!valid(token))return;
-    const result=await transitionMove(explanation.afterFen,explanation.survival.move,{duration:650},token);
+    await beat(220,90);if(!valid(token))return;
+    const result=await transitionMove(explanation.afterFen,explanation.survival.move,{duration:420},token);
     if(!result||!valid(token))return;
   }else{explanation.mode='coverage';setPosition(explanation.afterFen);}
   hideCue();
@@ -832,14 +868,14 @@ function explanationView(mode){
   if(mode==='response'){run(replayResponse);return;}
   if(mode==='survival'){run(replaySurvival);return;}
   explanation.mode=mode;explanation.focusBlack=null;
-  setPosition(explanation.afterFen);renderUI();ensureBoardVisible();
+  setPosition(explanation.afterFen);renderUI();ensureBoardVisible({force:true});
 }
 async function replayResponse(){
   if(busy||!explanation||!explanation.reply)return;
   const e=explanation,token=newOperation();e.mode='response';
   setPosition(e.playedFen);renderUI();
-  await wait(reduceMotion.matches?140:650);if(!valid(token))return;
-  const result=await transitionMove(e.playedFen,e.reply,{duration:750},token);
+  await beat(300,140);if(!valid(token))return;
+  const result=await transitionMove(e.playedFen,e.reply,{duration:480},token);
   if(!result||!valid(token))return;
   endOperation(token);
 }
@@ -847,8 +883,8 @@ async function replaySurvival(){
   if(busy||!explanation?.survival)return;
   const e=explanation,token=newOperation();e.mode='survival';
   setPosition(e.afterFen);renderUI();
-  await wait(reduceMotion.matches?120:480);if(!valid(token))return;
-  const result=await transitionMove(e.afterFen,e.survival.move,{duration:700},token);
+  await beat(240,120);if(!valid(token))return;
+  const result=await transitionMove(e.afterFen,e.survival.move,{duration:450},token);
   if(!result||!valid(token))return;
   endOperation(token);
 }
@@ -866,13 +902,13 @@ async function retryAttempt(){
   finally{echo?.remove();if(real&&!valid(token))real.style.visibility='';}
   if(!valid(token))return;
   setPlaybackStage('hold');
-  await wait(reduceMotion.matches?180:520);if(!valid(token))return;
+  await beat(360,180);if(!valid(token))return;
   setPlaybackStage('rewind');cue('REWIND','元の局面でもう一度');sound('rewind');
   if(e.survival&&viewFen===e.survival.fen){await rewindMove(e.afterFen,e.survival.move,e.survival.fen,token);if(!valid(token))return;}
   if(e.reply){await rewindMove(e.playedFen,e.reply,e.afterFen,token);if(!valid(token))return;}
   await rewindMove(e.beforeFen,e.move,e.playedFen,token);if(!valid(token))return;
   phase=e.returnPhase;explanation=null;
-  setPlaybackStage(null);hideCue();setPosition(e.beforeFen);
+  setPlaybackStage(null);clearMotionGuide();hideCue();setPosition(e.beforeFen);
   setFeedback(phase==='key'?'初手をもう一度考えましょう':'このシャドーにもう一度挑戦',hintsOn?'光っている白駒が、正解の手を持っています。':'白駒と移動先をタップして着手できます。');
   endOperation(token);paint();
 }
@@ -888,10 +924,10 @@ async function openBranch(branch){
   phase='black';active=branch;completedMate=false;lastPlayedMate=null;
   saveProgress();renderUI();setPosition(postKeyFen);
   cue('SHADOW SELECTED','黒 …'+branch.san,'black');
-  await wait(reduceMotion.matches?45:250);if(!valid(token))return;
-  const result=await transitionMove(postKeyFen,branch.move,{duration:760},token);
+  await beat(70,45);if(!valid(token))return;
+  const result=await transitionMove(postKeyFen,branch.move,{duration:440},token);
   if(!result||!valid(token))return;
-  await wait(reduceMotion.matches?70:250);if(!valid(token))return;
+  await beat(70,70);if(!valid(token))return;
   phase='mate';hideCue();sound('black');
   setFeedback('黒 '+branch.san+' のシャドーに挑戦',hintsOn?'光る白駒を選び、詰みの一手を探しましょう。ほかの候補は薄い点線で残しています。':'白の2手目で詰ませましょう。ほかの候補は薄い点線で残しています。');
   endOperation(token);paint();
@@ -919,7 +955,7 @@ async function shatterSprite(sprite,square,token,tone='victory'){
     fragment.style.clipPath='polygon('+x*50+'% '+y*100/3+'%, '+(x+1)*50+'% '+y*100/3+'%, '+(x+1)*50+'% '+(y+1)*100/3+'%, '+x*50+'% '+(y+1)*100/3+'%)';
     fragment.append(piece.cloneNode(true));sprite.append(fragment);
     const dx=(x?1:-1)*(12+y*6),dy=(y-1)*19-6;
-    tasks.push(effectAnimation(fragment,[{opacity:1,transform:'translate(0,0) rotate(0)'},{opacity:0,transform:'translate('+dx+'px,'+dy+'px) rotate('+((x?1:-1)*(18+y*8))+'deg) scale(.65)'}],490,token));
+    tasks.push(effectAnimation(fragment,[{opacity:1,transform:'translate(0,0) rotate(0)'},{opacity:0,transform:'translate('+dx+'px,'+dy+'px) rotate('+((x?1:-1)*(18+y*8))+'deg) scale(.65)'}],420,token));
   }
   piece.style.visibility='hidden';burst(square,token);
   await Promise.all(tasks);
@@ -942,7 +978,7 @@ async function shadowDefeat(targets,winningMove,token){
     if(attacker){
       const a=squareElement(winningMove.to).getBoundingClientRect(),z=squareElement(active.to).getBoundingClientRect();
       const dx=z.left-a.left,dy=z.top-a.top,len=Math.hypot(dx,dy)||1;
-      await effectAnimation(attacker,[{transform:'scale(1)'},{transform:'translate('+dx/len*11+'px,'+dy/len*11+'px) scale(1.18)',offset:.45},{transform:'scale(1)'}],340,token);
+      await effectAnimation(attacker,[{transform:'scale(1)'},{transform:'translate('+dx/len*11+'px,'+dy/len*11+'px) scale(1.18)',offset:.45},{transform:'scale(1)'}],240,token);
     }
     if(!valid(token))return;
     setPlaybackStage('shatter');sound('capture');
@@ -956,6 +992,7 @@ async function shadowDefeat(targets,winningMove,token){
 }
 async function effectAnimation(element,keyframes,duration,token){
   if(reduceMotion.matches){await wait(90);return valid(token);}
+  duration=pace(duration);
   let animation;
   try{animation=element.animate(keyframes,{duration,easing:'ease-out',fill:'forwards'});animations.add(animation);await settleAnimation(animation,duration);}
   catch{await wait(duration);}
@@ -968,7 +1005,7 @@ async function rewindBranch(token,{defeated=[]}={}){
   const afterBlack=branch.afterFen;
   if(completedMate){
     await rewindMove(afterBlack,lastPlayedMate||branch.mate,viewFen,token);if(!valid(token))return;
-    await wait(reduceMotion.matches?30:110);if(!valid(token))return;
+    await beat(60,30);if(!valid(token))return;
   }
   await rewindMove(postKeyFen,branch.move,afterBlack,token);if(!valid(token))return;
   phase='explore';active=null;completedMate=false;lastPlayedMate=null;explanation=null;mateProof=null;mateProofStep=null;
@@ -977,7 +1014,7 @@ async function rewindBranch(token,{defeated=[]}={}){
   const remaining=branches.filter(b=>b.from===branch.from&&!solved.has(b.id)).length;
   if(!remaining)focusFrom=null;
   const complete=solved.size===branches.length;
-  phase=complete?'complete':'explore';setPlaybackStage(null);hideCue();
+  phase=complete?'complete':'explore';setPlaybackStage(null);clearMotionGuide();hideCue();
   if(complete){cue('ALL SHADOWS CLEARED','全 '+branches.length+' 手を攻略しました','key',2200);setFeedback('すべてのシャドーを攻略しました','黒の全応手に詰みを証明。盤面がクリアになりました。応手一覧から何度でも見直せます。','good');}
   else setFeedback(defeated.length?'シャドーを'+defeated.length+'体攻略 ✓':'次のシャドーを選びましょう',(defeated.length>1?'同じ一手で詰む候補をまとめて撃破。':'')+(remaining?'この黒駒の残り '+remaining+' 体。':'この黒駒の候補はすべて攻略済み。別の印付き黒駒を選びましょう。'),defeated.length?'good':'neutral');
   endOperation(token);paint();
@@ -1070,30 +1107,51 @@ function startGesture(e){
   const possible=selected && targetMove(sq);
   if(!movable&&!possible){clearSelection();return;}
   e.preventDefault();
+  const wasSelected=selected===sq;
   if(movable)selectFrom(sq);
-  gesture={id:e.pointerId,startX:e.clientX,startY:e.clientY,source:selected,direct:!movable&&!!possible,moved:false};
+  const source=squareElement(selected),a=source.getBoundingClientRect(),bounds=board.getBoundingClientRect();
+  gesture={id:e.pointerId,startX:e.clientX,startY:e.clientY,source:selected,direct:!movable&&!!possible,moved:false,
+    wasSelected,originX:a.left-bounds.left,originY:a.top-bounds.top,width:a.width,height:a.height,dx:0,dy:0,sprite:null,piece:null};
   try{board.setPointerCapture(e.pointerId);}catch{}
+}
+function renderDrag(){
+  dragFrame=null;const g=gesture;if(!g)return;
+  if(g.moved&&!g.direct){
+    if(!g.sprite){
+      const piece=squareElement(g.source)?.querySelector(':scope > .piece');
+      if(piece){
+        const sprite=document.createElement('span');sprite.className='move-sprite drag-sprite';sprite.setAttribute('aria-hidden','true');
+        Object.assign(sprite.style,{left:g.originX+'px',top:g.originY+'px',width:g.width+'px',height:g.height+'px'});
+        sprite.append(piece.cloneNode(true));board.append(sprite);g.sprite=sprite;g.piece=piece;piece.style.visibility='hidden';
+      }
+    }
+    if(g.sprite)g.sprite.style.transform='translate3d('+g.dx+'px,'+g.dy+'px,0) scale(1.04)';
+  }
+  const sq=squareAt(g.startX+g.dx,g.startY+g.dy),next=sq&&targetMove(sq)?sq:null;
+  if(next!==hover){hover=next;updateGuides();}
 }
 function moveGesture(e){
   if(!gesture||gesture.id!==e.pointerId||busy)return;
   e.preventDefault();
-  if(Math.hypot(e.clientX-gesture.startX,e.clientY-gesture.startY)>5)gesture.moved=true;
-  const sq=squareAt(e.clientX,e.clientY);
-  const next=sq&&targetMove(sq)?sq:null;
-  if(next!==hover){hover=next;updateGuides();}
+  gesture.dx=e.clientX-gesture.startX;gesture.dy=e.clientY-gesture.startY;
+  if(Math.hypot(gesture.dx,gesture.dy)>6)gesture.moved=true;
+  if(dragFrame===null)dragFrame=requestAnimationFrame(renderDrag);
 }
 function endGesture(e){
   if(!gesture||gesture.id!==e.pointerId)return;
   e.preventDefault();
-  const g=gesture;gesture=null;
-  try{board.releasePointerCapture(e.pointerId);}catch{}
-  if(busy)return;
+  const g=gesture;
   const sq=squareAt(e.clientX,e.clientY);
   const move=sq&&targetMove(sq);
+  const release=g.sprite&&move?{x:g.originX+e.clientX-g.startX,y:g.originY+e.clientY-g.startY}:null;
+  cancelGesture();
+  if(busy)return;
   if(move && sq!==selected){
     clearSelection();
-    run(()=>attemptWhite(move));
+    run(()=>attemptWhite(move,{release}));
   }else if(g.moved && sq!==selected){
+    clearSelection();
+  }else if(g.wasSelected&&!g.moved){
     clearSelection();
   }else{
     hover=null;updateGuides();
@@ -1134,6 +1192,7 @@ board.addEventListener('keydown',e=>{
   if(e.key!=='Enter'&&e.key!==' ')return;
   e.preventDefault();
   if(busy||!overlay.hidden)return;
+  primeAudio();
   if(phase==='explore'||phase==='complete'){
     const branchId=squareElement(sq)?.querySelector('.ghost-target')?.dataset.branch;
     if(branchId)run(()=>openBranch(branches.find(b=>b.id===branchId)));
@@ -1205,20 +1264,21 @@ function finishReview(){hideOverlay();phase='explore';focusFrom=null;paint();sav
 $('soundBtn').addEventListener('click',()=>{
   audioOn=!audioOn;
   soundscape.setEffects(audioOn);
-  renderUI();savePreferences();
+  audioTestMessage=null;renderAudioUI();savePreferences();
 });
 $('musicBtn').addEventListener('click',()=>{
   musicOn=!musicOn;audioTestMessage=null;
   soundscape.setMusic(musicOn);
-  renderUI();savePreferences();
+  renderAudioUI();savePreferences();
 });
 $('audioTestBtn').addEventListener('click',async()=>{
   // This direct user gesture is necessary for reliable audio activation on iOS.
   const ready=await soundscape.testSound();
   audioTestMessage=ready?'♫ 確認音を再生しました。聞こえない場合は端末の音量・消音・出力先をご確認ください。':'♫ 音声を開始できません。画面をタップしてからもう一度試すか、ブラウザの音声設定をご確認ください。';
-  renderUI();
+  renderAudioUI();
 });
-window.addEventListener('mate-two:audio-state',()=>{if($('musicBtn'))renderUI();});
+window.addEventListener('mate-two:audio-state',()=>{if($('musicBtn'))renderAudioUI();});
+$('tempoBtn').addEventListener('click',()=>{quickOn=!quickOn;renderUI();savePreferences();});
 $('returnBtn').addEventListener('click',()=>{
   if(busy){
     if(proofPlaying){$('skipProof').click();return;}
@@ -1242,7 +1302,7 @@ window.addEventListener('resize',()=>{
   if(phase==='explain')requestAnimationFrame(drawExplanation);
 });
 window.__mateTwoDebug={
-  state:()=>({phase,viewFen,audioOn,musicOn,soundStatus:soundscape.status(),motion:moveTrace,mateProof:!!mateProof,mateProofStep,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
+  state:()=>({phase,viewFen,audioOn,musicOn,quickOn,soundStatus:soundscape.status(),motion:moveTrace,mateProof:!!mateProof,mateProofStep,solved:solved.size,solvedIds:[...solved],total:branches.length,active:active?.san,focusFrom,busy,orientation,hintsOn,playbackStage,explanation:explanation?{mode:explanation.mode,kind:explanation.description.kind,reply:explanation.reply?.san,from:explanation.reply?.from,to:explanation.reply?.to,returnPhase:explanation.returnPhase,survival:explanation.survival?.move.san,autoRewind:explanation.autoRewind}:null}),
   branches:()=>branches.map(b=>({id:b.id,san:b.san,mate:b.mate.san,mateFrom:b.mate.from,mateTo:b.mate.to,mates:b.mates.map(m=>m.from+m.to+(m.promotion||''))})),
   choose:(id)=>openBranch(branches.find(b=>b.id===id)),
   reset:hardReset
