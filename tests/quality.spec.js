@@ -275,3 +275,43 @@ test('iPhone widths, landscape and enlarged text keep board square and controls 
   await page.setViewportSize({width:320,height:568});await page.addStyleTag({content:'.feedback strong,.feedback span,#helpText,.lab-controls button,.phase-card h2,#explanationDetail,.explanation-tabs button {font-size:20px;}'});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await app.tap(page.locator('#retryBtn'));await app.phase('mate');
 });
+
+
+test('White and Black kings are unmistakable throughout play; checkmate visibly explains every escape',async({page,app})=>{
+  await expect(app.sq('g2')).toHaveClass(/king-white/);
+  await expect(app.sq('g2').locator('.king-identity')).toHaveText('白王');
+  await expect(app.sq('c4')).toHaveClass(/king-black/);
+  await expect(app.sq('c4').locator('.king-identity')).toHaveText('黒王');
+  await key(page,app);
+  await expect(app.sq('h2').locator('.king-identity')).toHaveText('白王');
+  await open(page,app,'d3d2');
+  await app.tap(app.sq('f3'));await app.tap(app.sq('d2'));
+  await expect.poll(async()=>(await app.state()).mateProof,{timeout:8000}).toBe(true);
+  await expect(page.locator('#boardLegend')).toContainText('黒の合法応手 0');
+  await expect(page.locator('.showing-mate-proof .analysis-arrow.check')).not.toHaveCount(0);
+  await expect(page.locator('.analysis-escape')).toHaveCount(0);
+  await expect(app.sq('c4').locator('.king-identity')).toHaveText('黒王');
+  await app.phase('explore',15000);
+  await expect(page.locator('.analysis-arrow')).toHaveCount(0);
+  await expect(page.locator('.king-identity')).toHaveCount(2);
+});
+
+test('suspended Safari-style move animation finishes under watchdog instead of freezing input',async({page,app})=>{
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.evaluate(()=>{
+    const original=Element.prototype.animate;
+    let first=true;
+    Element.prototype.animate=function(...args){
+      const animation=original.apply(this,args);
+      if(first&&this.classList?.contains('move-sprite')){
+        first=false;animation.pause();
+      }
+      return animation;
+    };
+  });
+  await app.tap(app.sq('g2'));await app.tap(app.sq('h2'));
+  await app.phase('explore',10000);
+  expect((await app.state()).busy).toBe(false);
+  await expect(page.locator('.move-sprite')).toHaveCount(0);
+  await expect(app.sq('h2').locator(':scope > .piece.white')).toBeVisible();
+});
