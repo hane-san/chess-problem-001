@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Optional local Chromium (e.g. a cloud container whose bundled browser differs). CI leaves it unset.
+const chromiumLaunch = process.env.CHROMIUM_EXECUTABLE ? { launchOptions: { executablePath: process.env.CHROMIUM_EXECUTABLE } } : {};
+
 export default defineConfig({
   testDir: './tests',
   testIgnore: ['**/unit/**'],
@@ -17,9 +20,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'iphone-chromium', use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } },
+    { name: 'iphone-chromium', use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium', ...chromiumLaunch } },
     { name: 'iphone-webkit', use: { ...devices['iPhone 13'] } },
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } } },
+    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 }, ...chromiumLaunch } },
   ],
   webServer: {
     command: 'python3 -m http.server 8876 --bind 127.0.0.1',

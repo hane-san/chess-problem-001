@@ -59,6 +59,9 @@ jobs:
           rsync -a --delete \
             --exclude '.git' \
             --exclude '.github' \
+            --exclude '.claude' \
+            --exclude 'AGENTS.md' \
+            --exclude 'CLAUDE.md' \
             --exclude '_site' \
             --exclude 'node_modules' \
             --exclude 'package.json' \
