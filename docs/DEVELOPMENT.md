@@ -20,3 +20,7 @@
 
 - Settings → Rules：main対象でPR必須・`build` 必須・force push禁止・削除制限。現在の設定状態はこのrepoでは未確認。
 - 夜間巡回をClaude Codeのスケジュール実行で行う場合も、マージは人間が行う。
+
+## Claude Codeによる監督・明け方の巡回
+
+GPT/Codex等のPRをClaude Codeが受け取る手順は `.claude/skills/steward/SKILL.md`。明け方の巡回：毎日4:12（日本時間）に、専用セッション「明け方の監督巡回（独立監査担当）」が5つのリポジトリのPRを、このスキルの手順で見回る（2026-10-20 採用）。
