@@ -1,0 +1,16 @@
+{
+  "name": "MATE / TWO — Chess Problem Lab",
+  "short_name": "MATE / TWO",
+  "description": "静かな一手から、すべての詰みへ。黒の応手を一つずつ読み解くチェス・プロブレム。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111a17",
+  "theme_color": "#111a17",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

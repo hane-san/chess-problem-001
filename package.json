@@ -13,6 +13,7 @@
     "vendor:chess": "node scripts/vendor-chess.mjs",
     "check:vendor": "node scripts/vendor-chess.mjs --check",
     "validate": "node scripts/validate-problems.mjs",
+    "icons": "node scripts/render-icons.mjs",
     "test:smoke": "playwright test --grep \"all 13|shadow choice\"",
     "test:browser": "playwright test",
     "test": "npm run check:vendor && npm run validate && npm run test:unit && npm run test:browser",
