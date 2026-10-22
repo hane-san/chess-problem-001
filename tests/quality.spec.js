@@ -468,3 +468,16 @@ test('iPhone play and return controls stay beside the board within the first vie
   const button=await page.locator('#returnBtn').boundingBox();expect(button.y+button.height).toBeLessThanOrEqual(664);
   await app.tap(page.locator('#returnBtn'));await app.phase('explore');await expect(page.locator('#motionCaption')).toBeHidden();
 });
+
+test('home-screen icon and manifest load at their declared sizes',async({page,app})=>{
+  const touch=await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
+  const manifestHref=await page.locator('link[rel="manifest"]').getAttribute('href');
+  const manifest=await (await page.request.get(manifestHref)).json();
+  expect(manifest.start_url).toBe('./');expect(manifest.scope).toBe('./');
+  const icons=[{src:touch,sizes:'180x180'},...manifest.icons.filter(icon=>icon.type==='image/png')];
+  expect(icons.length).toBe(3);
+  for(const icon of icons){
+    const size=await page.evaluate(src=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img.naturalWidth+'x'+img.naturalHeight);img.onerror=reject;img.src=src;}),icon.src);
+    expect(size).toBe(icon.sizes);
+  }
+});

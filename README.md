@@ -50,7 +50,8 @@ iPhoneのセーフエリア、縦横両画面、ページ拡大に対応しま�
 - `soundscape.js`: BGM、効果音、iPhoneの音声起動と独立した確認音
 - `data/problems.js`: FEN、初手、代表変化、解説、出典
 - `vendor/chess.js`: 固定バージョン chess.js 1.4.0（ライセンス同梱）
-- `assets/icon.svg`: アプリアイコン
+- `assets/icon.svg`: アプリアイコン。ホーム画面用の `apple-touch-icon.png`（180px）と `icon-192.png` / `icon-512.png` は `npm run icons` でこのSVGから生成します（手で描き換えない）
+- `manifest.webmanifest`: ホーム画面に追加したときの名前・色・アイコン（Service Workerはありません）
 
 合法手と詰み判定は chess.js を使用します。黒の応手はすべて合法手から生成し、各応手の実際の詰みを検証します。現在は1問の #2 専用で、問題選択や詰将棋のルールには対応していません。
 
