@@ -97,6 +97,7 @@ const squares = new Map();
 const trayButtons = new Map();
 let cachedFen=null,cachedEngine=null;
 let dragFrame=null;
+let operationFocus=null;
 
 function pace(ms){return Math.round(ms*(quickOn?.65:1));}
 function beat(normal,reduced){return wait(reduceMotion.matches?reduced:pace(normal));}
@@ -545,7 +546,9 @@ function setBlackFocus(from){
     const options=branches.filter(b=>b.from===focusFrom);
     const completed=options.filter(b=>solved.has(b.id)).length;
     const piece=postKeyEngine.get(focusFrom);
-    setFeedback('黒の '+NAME[piece.type]+' のシャドー','残り '+(options.length-completed)+' 体。半透明の黒いシャドーを1つ選んで攻略しましょう。');
+    const remaining=options.length-completed;
+    if(remaining)setFeedback('黒の '+NAME[piece.type]+' のシャドー','残り '+remaining+' 体。半透明の黒いシャドーを1つ選んで攻略しましょう。');
+    else setFeedback('黒の '+NAME[piece.type]+' はすべて攻略済み','この駒のシャドーは残っていません。別の印付き黒駒を選ぶか、応手一覧から見直せます。');
   }else{
     setFeedback('どの黒駒から検証しますか？','印の付いた黒駒をタップして、可能な応手を表示します。');
   }
@@ -589,6 +592,7 @@ function renderUI(){
   $('progressBar').style.width=(solved.size/total*100)+'%';
   $('progressTrack').setAttribute('aria-valuenow',String(solved.size));
   $('progressTrack').setAttribute('aria-valuemax',String(total));
+  const focusRemaining=focusFrom?branches.filter(b=>b.from===focusFrom&&!solved.has(b.id)).length:0;
   const step=phase==='key'||phase==='explain'&&explanation?.returnPhase==='key'?'key':['explore','black'].includes(phase)?'explore':'mate';
   const stepNames=['key','explore','mate'];
   document.querySelectorAll('.phase-steps li').forEach(el=>{
@@ -597,7 +601,7 @@ function renderUI(){
   });
   const phases={
     key:['01','FIND THE KEY','白の初手を探しましょう','駒 → 移動先の順にタップ。スライドでも動かせます。'],
-    explore:['02','CHOOSE A SHADOW','攻略するシャドーを選ぶ',focusFrom?'半透明の黒駒を選ぶと、その手だけが実体化します。':'印のある黒駒をタップ。攻略したシャドーは消えていきます。'],
+    explore:['02','CHOOSE A SHADOW','攻略するシャドーを選ぶ',focusFrom?(focusRemaining?'半透明の黒駒を選ぶと、その手だけが実体化します。':'この黒駒のシャドーはすべて攻略済み。別の印付き黒駒を選びましょう。'):'印のある黒駒をタップ。攻略したシャドーは消えていきます。'],
     black:['02','BLACK TO MOVE','黒の '+(active?.san||'応手')+' を確認','ほかの候補は薄い点線で残ります。'],
     mate:['03','DEFEAT THE SHADOW','白の一手でシャドーを攻略',hintsOn?'光る駒は詰みにつながる白駒。移動先を考えましょう。':'白駒を動かして詰みを探しましょう。「応手へ」で戻れます。'],
     victory:['✓','CHECKMATE','シャドーを攻略しました','同じ一手で詰むシャドーをまとめて撃破。余韻のあと巻き戻します。'],
@@ -626,7 +630,7 @@ function renderUI(){
       :phase==='victory'?'CHECKMATEを確認中'
       :'白の一手を再生しています'
     :phase==='key'?'白のKeyを探す · 駒をタップ'
-      :phase==='explore'?(focusFrom?'この黒駒のゴーストから1つ選択':'印のある黒駒を選んで分岐を表示')
+      :phase==='explore'?(focusFrom?(focusRemaining?'この黒駒のゴーストから1つ選択':'この黒駒は攻略済み · 別の黒駒を選択'):'印のある黒駒を選んで分岐を表示')
       :phase==='mate'?'白の詰み手を試す · いつでも戻れます'
       :phase==='explain'?(explanation?.autoRewind?'反証を読む · 自動で巻き戻ります':'反証を読む · 戻るボタンで再挑戦')
       :phase==='complete'?'全応手を攻略済み · 再訪できます'
@@ -767,6 +771,10 @@ function ensureBoardVisible({force=false}={}){
   if((force&&(rect.top<visibleTop||rect.bottom>visibleBottom))||visible<rect.height*.75)wrap.scrollIntoView({block:'center',behavior:'auto'});
 }
 function newOperation(){
+  // Controls are disabled or rebuilt while busy, which drops keyboard focus to <body>.
+  const focused=document.activeElement;
+  operationFocus=focused&&focused!==document.body&&document.querySelector('.shell')?.contains(focused)
+    ?{element:focused,square:focused.closest('.square')?.dataset.square||null}:null;
   sequence+=1;
   cancelGesture();clearMotionGuide();ensureBoardVisible();
   busy=true;
@@ -781,6 +789,19 @@ function endOperation(token){
   busy=false;
   updateGuides();renderUI();
   saveProgress();
+  const previous=operationFocus;operationFocus=null;
+  // Callers repaint synchronously after endOperation; restore once that settles.
+  if(previous)queueMicrotask(()=>restoreOperationFocus(previous));
+}
+function restoreOperationFocus({element,square}){
+  if(busy)return;
+  const current=document.activeElement;
+  if(current&&current!==document.body)return;
+  const usable=element.isConnected&&!element.disabled&&!element.closest('[hidden]')&&element.getClientRects().length>0;
+  if(usable){element.focus({preventScroll:true});return;}
+  // A removed shadow button falls back to the square where that black piece now stands.
+  const fallback=square&&squareElement(square)?square:keyboardSquare;
+  setKeyboardSquare(fallback,true);
 }
 async function attemptWhite(move,{release=null}={}){
   if(busy||!move||completedMate||!['key','mate'].includes(phase))return;

@@ -481,3 +481,26 @@ test('home-screen icon and manifest load at their declared sizes',async({page,ap
     expect(size).toBe(icon.sizes);
   }
 });
+
+test('keyboard focus survives shadow, defence-list and reveal operations; a fully solved black piece says so',async({page,app})=>{
+  await app.sq('g2').focus();await page.keyboard.press('Enter');await page.keyboard.press('ArrowRight');await page.keyboard.press('Enter');await app.phase('explore');
+  await app.sq('d3').focus();await page.keyboard.press('Enter');
+  await page.locator('.shadow-choice[data-branch="d3d2"]').focus();await page.keyboard.press('Enter');await app.phase('mate');
+  // The chosen shadow button is gone; focus lands on the square where that black piece now stands.
+  await expect(app.sq('d2')).toBeFocused();
+  await page.keyboard.press('ArrowRight');await expect(app.sq('e2')).toBeFocused();
+  await app.tap(page.locator('#showBranchesBtn'));
+  const chip=page.locator('.branch-chip[data-branch="d3d4"]');await chip.focus();await page.keyboard.press('Enter');await app.phase('mate');
+  await expect(chip).toBeFocused();
+  await page.locator('#revealBtn').focus();await page.keyboard.press('Enter');await app.phase('explore');
+  await expect(page.locator('#revealBtn')).toBeFocused();
+  await page.evaluate(()=>{
+    const k='mate-two:progress:cp-0001',saved=JSON.parse(localStorage.getItem(k));
+    saved.solved=['b2a4','b2d1'];saved.focusFrom=null;localStorage.setItem(k,JSON.stringify(saved));
+  });
+  await page.reload();await app.phase('explore');await app.tap(app.sq('b2'));
+  await expect(page.locator('.shadow-choice')).toHaveCount(0);
+  await expect(page.locator('#feedback')).toContainText('すべて攻略済み');
+  await expect(page.locator('#feedback')).not.toContainText('選んで攻略');
+  await expect(page.locator('#helpText')).not.toContainText('半透明の黒駒を選ぶ');
+});
